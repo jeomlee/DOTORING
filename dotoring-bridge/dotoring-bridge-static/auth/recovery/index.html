@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>DOTORING</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background:#fff; }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 48px 20px; }
+      h1 { margin: 0 0 12px; font-size: 28px; }
+      p { margin: 0 0 20px; color: #555; line-height: 1.5; }
+      button {
+        border: 0; border-radius: 14px; padding: 14px 18px;
+        font-size: 16px; cursor: pointer; background: #111; color:#fff;
+      }
+      .small { margin-top: 14px; font-size: 12px; color:#777; }
+      code { background:#f3f3f3; padding:2px 6px; border-radius:6px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>DOTORING</h1>
+      <p id="msg">복구 정보 확인 중…</p>
+      <button id="openBtn">DOTORING 앱 열기</button>
+      <div class="small" id="debug"></div>
+    </div>
+
+    <script>
+      const msg = document.getElementById("msg");
+      const debug = document.getElementById("debug");
+      const openBtn = document.getElementById("openBtn");
+
+      // Supabase는 보통 hash(#access_token=...&refresh_token=...)로 내려줌
+      const hash = window.location.hash ? window.location.hash.replace(/^#/, "") : "";
+      const hasToken = hash.includes("access_token=") && hash.includes("refresh_token=");
+
+      // ✅ 핵심: hash를 query로 바꿔서 앱으로 넘김 (Android/브라우저에서 hash 누락되는 경우 방지)
+      const deepLink = hasToken
+        ? ("dotoring://auth/recovery?" + hash)
+        : "dotoring://auth/recovery";
+
+      debug.textContent = hasToken ? "OK: access_token 감지" : "복구 정보 없음";
+
+      function openApp() {
+        // 대부분의 모바일 브라우저는 사용자 제스처(클릭)에서만 커스텀 스킴 열어줌
+        window.location.href = deepLink;
+      }
+
+      openBtn.addEventListener("click", openApp);
+
+      if (hasToken) {
+        msg.textContent = "복구 정보 감지됨. 아래 버튼을 눌러 앱을 열어줘.";
+        // 자동 시도(될 수도 있고, 브라우저가 막을 수도 있음)
+        setTimeout(openApp, 350);
+      } else {
+        msg.textContent = "복구 정보가 없어요. 메일의 링크를 다시 눌러줘.";
+      }
+    </script>
+  </body>
+</html>
