@@ -1,30 +1,78 @@
 {
   "expo": {
-    "name": "dotoring",
+    "name": "DOTORING",
     "slug": "dotoring",
+    "scheme": "dotoring",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "buildNumber": "6",
+      "usesAppleSignIn": true,
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jeomlee.dotoring",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "com.jeomlee.dotoring",
+            "CFBundleURLSchemes": ["dotoring"]
+          }
+        ],
+        "NSUserNotificationsUsageDescription": "도토리 만료 알림을 보내기 위해 알림 권한이 필요합니다.",
+        "NSPhotoLibraryUsageDescription": "쿠폰 이미지를 추가하기 위해 사진 접근 권한이 필요합니다.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.jeomlee.dotoring",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "edgeToEdgeEnabled": false,
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            { "scheme": "dotoring", "host": "auth", "pathPrefix": "/callback" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            { "scheme": "dotoring", "host": "auth", "pathPrefix": "/recovery" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ad060bb9-6e48-4bec-8a00-35cc12bf3ac9"
+      }
     }
   }
 }
