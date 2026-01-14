@@ -21,7 +21,10 @@ import SectionCard from '../components/SectionCard';
 import DotoButton from '../components/DotoButton';
 import { colors } from '../theme';
 
-import { rescheduleAllCouponNotifications } from '../utils/couponNotifications';
+import {
+  rescheduleAllCouponNotifications,
+  cancelAllLocalCouponNotifications, // ✅ 추가
+} from '../utils/couponNotifications';
 
 type ReasonKey =
   | 'too_hard'
@@ -267,11 +270,18 @@ export default function SettingsScreen({ navigation }: any) {
     }
   };
 
+  // ✅ 로그아웃: "로컬 스케줄" 먼저 정리하고 signOut
   const handleLogout = async () => {
     setLogoutLoading(true);
-    const { error } = await supabase.auth.signOut();
-    setLogoutLoading(false);
-    if (error) Alert.alert('로그아웃 실패', error.message);
+    try {
+      // ✅ 핵심: 디바이스에 남아있는 예약 알림을 싹 제거
+      await cancelAllLocalCouponNotifications();
+
+      const { error } = await supabase.auth.signOut();
+      if (error) Alert.alert('로그아웃 실패', error.message);
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   const loadDeleteSummary = async () => {
@@ -346,6 +356,10 @@ export default function SettingsScreen({ navigation }: any) {
       if (!data?.ok) throw new Error(data?.error ?? '삭제에 실패했어요.');
 
       Alert.alert('탈퇴 완료', '계정이 삭제되었어요. 이용해줘서 고마워요.');
+
+      // ✅ 혹시 탈퇴 후에도 남는 로컬 알림 제거
+      await cancelAllLocalCouponNotifications();
+
       await supabase.auth.signOut();
       setDeleteOpen(false);
     } catch (e: any) {

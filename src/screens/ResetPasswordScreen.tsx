@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+// src/screens/ResetPasswordScreen.tsx
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Alert } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useRoute } from '@react-navigation/native';
@@ -13,7 +14,6 @@ type Params = Record<string, any>;
 
 function parseParamsFromUrl(url: string): Record<string, string> {
   const out: Record<string, string> = {};
-
   try {
     const qIndex = url.indexOf('?');
     const hIndex = url.indexOf('#');
@@ -27,9 +27,7 @@ function parseParamsFromUrl(url: string): Record<string, string> {
         if (!p) continue;
         const [k, v] = p.split('=');
         if (!k) continue;
-        const key = decodeURIComponent(k);
-        const val = v ? decodeURIComponent(v) : '';
-        out[key] = val;
+        out[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
       }
     };
 
@@ -48,7 +46,6 @@ function parseParamsFromUrl(url: string): Record<string, string> {
   } catch {
     // ignore
   }
-
   return out;
 }
 
@@ -75,14 +72,23 @@ export default function ResetPasswordScreen({
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
-
-  // ✅ 성공 후 signOut 시 세션이 사라져도 이 화면이 흔들리지 않게 고정
   const [completed, setCompleted] = useState(false);
 
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
 
+  const handledOnceRef = useRef(false);
+
   const routeParams = useMemo(() => normalizeAnyParams(route?.params), [route?.params]);
+
+  const exitToAuthLanding = () => {
+    onExitRecovery?.();
+    // RootStack 구조이므로 AuthStack으로 리셋
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'AuthStack', params: { screen: 'AuthLanding' } }],
+    });
+  };
 
   const setSessionFromParams = async (p: Record<string, string>) => {
     console.log('[ResetPassword] incoming keys:', Object.keys(p));
@@ -91,15 +97,10 @@ export default function ResetPasswordScreen({
       throw new Error(p.error_description || p.error);
     }
 
-    /**
-     * Supabase recovery 링크는 환경에 따라:
-     * - PKCE: ?code=... (&type=recovery가 없을 수도 있음)
-     * - Implicit: #access_token=...&refresh_token=...&type=recovery
-     */
     const hasCode = !!p.code;
     const hasTokens = !!(p.access_token && p.refresh_token);
 
-    // ✅ 1) PKCE code flow: type이 없더라도 code가 있으면 일단 교환 시도
+    // ✅ 1) PKCE code flow
     if (hasCode) {
       console.log('[ResetPassword] exchangeCodeForSession...');
       const { error } = await supabase.auth.exchangeCodeForSession(p.code);
@@ -118,7 +119,7 @@ export default function ResetPasswordScreen({
       return true;
     }
 
-    // ✅ 3) Already has session
+    // ✅ 3) 혹시 이미 세션이 있으면 OK
     const { data } = await supabase.auth.getSession();
     if (data.session) {
       console.log('[ResetPassword] session already exists');
@@ -128,19 +129,15 @@ export default function ResetPasswordScreen({
     return false;
   };
 
-  const handleIncoming = async (source: 'route' | 'url', payload: Record<string, string>) => {
+  const handleIncoming = async (payload: Record<string, string>) => {
     const ok = await setSessionFromParams(payload);
     if (!ok) {
-      throw new Error(
-        source === 'route'
-          ? '복구 정보가 앱으로 전달되지 않았어요. 메일의 링크를 다시 눌러주세요.'
-          : '복구 링크에서 세션 정보를 찾지 못했어요. 메일의 링크를 다시 눌러주세요.'
-      );
+      throw new Error('복구 링크에서 세션 정보를 찾지 못했어요. 메일의 링크를 다시 눌러주세요.');
     }
   };
 
   useEffect(() => {
-    if (completed) return; // ✅ 완료 후 링크/세션 재처리 중단
+    if (completed) return;
 
     let sub: any;
     let cancelled = false;
@@ -149,18 +146,17 @@ export default function ResetPasswordScreen({
       try {
         setChecking(true);
 
-        /**
-         * ✅ A) route.params 우선
-         * - App.tsx에서 initialParams={{ url: recoveryUrl }} 로 넘긴 케이스 처리
-         */
-        if (Object.keys(routeParams).length > 0) {
-          console.log('[ResetPassword] try route.params first:', routeParams);
+        // ✅ 1) route.params 우선 (App.tsx에서 { url } 넘긴 경우)
+        if (!handledOnceRef.current && Object.keys(routeParams).length > 0) {
+          handledOnceRef.current = true;
+
+          console.log('[ResetPassword] route.params:', routeParams);
 
           if (routeParams.url) {
             const p = parseParamsFromUrl(routeParams.url);
-            await handleIncoming('route', p);
+            await handleIncoming(p);
           } else {
-            await handleIncoming('route', routeParams);
+            await handleIncoming(routeParams);
           }
 
           if (!cancelled) {
@@ -170,25 +166,25 @@ export default function ResetPasswordScreen({
           return;
         }
 
-        /**
-         * ✅ B) initial URL
-         */
-        const initialUrl = await Linking.getInitialURL();
-        if (initialUrl) {
+        // ✅ 2) initial URL
+        if (!handledOnceRef.current) {
+          const initialUrl = await Linking.getInitialURL();
           console.log('[ResetPassword] initialUrl:', initialUrl);
-          const p = parseParamsFromUrl(initialUrl);
-          await handleIncoming('url', p);
 
-          if (!cancelled) {
-            setReady(true);
-            setChecking(false);
+          if (initialUrl) {
+            handledOnceRef.current = true;
+            const p = parseParamsFromUrl(initialUrl);
+            await handleIncoming(p);
+
+            if (!cancelled) {
+              setReady(true);
+              setChecking(false);
+            }
+            return;
           }
-          return;
         }
 
-        /**
-         * ✅ C) 마지막: 세션 확인
-         */
+        // ✅ 3) fallback: 세션 확인
         const { data } = await supabase.auth.getSession();
         if (!cancelled) {
           setReady(!!data.session);
@@ -196,16 +192,14 @@ export default function ResetPasswordScreen({
         }
       } catch (e: any) {
         if (!cancelled) {
-          console.log('[ResetPassword] handle error:', e?.message ?? e);
-          setChecking(false);
+          console.log('[ResetPassword] error:', e?.message ?? e);
           setReady(false);
+          setChecking(false);
           Alert.alert('복구 링크 처리 실패', e?.message ?? String(e));
         }
       }
 
-      /**
-       * ✅ D) 이후 url 이벤트
-       */
+      // ✅ 4) url 이벤트 (앱이 떠있는 상태에서 링크 재클릭)
       sub = Linking.addEventListener('url', (event) => {
         if (completed) return;
 
@@ -213,18 +207,14 @@ export default function ResetPasswordScreen({
         const p = parseParamsFromUrl(event.url);
 
         setChecking(true);
-        handleIncoming('url', p)
-          .then(() => {
-            setReady(true);
-          })
+        handleIncoming(p)
+          .then(() => setReady(true))
           .catch((e: any) => {
-            console.log('[ResetPassword] url event handle error:', e?.message ?? e);
+            console.log('[ResetPassword] url event error:', e?.message ?? e);
             setReady(false);
             Alert.alert('복구 링크 처리 실패', e?.message ?? String(e));
           })
-          .finally(() => {
-            setChecking(false);
-          });
+          .finally(() => setChecking(false));
       });
     })();
 
@@ -255,20 +245,13 @@ export default function ResetPasswordScreen({
       const { error } = await supabase.auth.updateUser({ password: pw1 });
       if (error) throw error;
 
-      // ✅ 완료 고정
       setCompleted(true);
 
-      // ✅ 보안: 비번 변경 후 로그아웃 (이후 로그인 화면으로)
+      // ✅ 비번 변경 후 로그아웃 (안전)
       await supabase.auth.signOut();
 
       Alert.alert('변경 완료', '이제 새 비밀번호로 로그인할 수 있어요.', [
-        {
-          text: '확인',
-          onPress: () => {
-            onExitRecovery?.();
-            navigation.reset({ index: 0, routes: [{ name: 'AuthLanding' }] });
-          },
-        },
+        { text: '확인', onPress: exitToAuthLanding },
       ]);
     } catch (e: any) {
       Alert.alert('변경 실패', e?.message ?? String(e));
@@ -280,9 +263,7 @@ export default function ResetPasswordScreen({
   return (
     <ScreenContainer>
       <View style={{ marginTop: 24, marginBottom: 12 }}>
-        <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>
-          비밀번호 재설정
-        </Text>
+        <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>비밀번호 재설정</Text>
         <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext, lineHeight: 18 }}>
           새 비밀번호를 입력해주세요.
         </Text>
@@ -298,16 +279,8 @@ export default function ResetPasswordScreen({
             <Text style={{ fontSize: 12, color: colors.subtext, lineHeight: 18 }}>
               복구 정보를 찾지 못했어요. 메일의 링크를 다시 눌러주세요.
             </Text>
-
             <View style={{ height: 12 }} />
-
-            <DotoButton
-              title="로그인으로 돌아가기"
-              onPress={() => {
-                onExitRecovery?.();
-                navigation.reset({ index: 0, routes: [{ name: 'AuthLanding' }] });
-              }}
-            />
+            <DotoButton title="로그인으로 돌아가기" onPress={exitToAuthLanding} />
           </>
         ) : (
           <>
@@ -353,7 +326,11 @@ export default function ResetPasswordScreen({
 
             <View style={{ height: 14 }} />
 
-            <DotoButton title={loading ? '변경 중...' : '비밀번호 변경'} onPress={updatePassword} disabled={loading} />
+            <DotoButton
+              title={loading ? '변경 중...' : '비밀번호 변경'}
+              onPress={updatePassword}
+              disabled={loading}
+            />
           </>
         )}
       </SectionCard>

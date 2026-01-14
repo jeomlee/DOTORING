@@ -5,7 +5,7 @@ import ScreenContainer from '../components/ScreenContainer';
 import { colors } from '../theme';
 
 export default function ContactScreen() {
-  const email = 'jungmolee26@gmail.com';
+  const email = 'zxcvbnm89432@gmail.com';
 
   const copyEmail = async () => {
     await Clipboard.setStringAsync(email);

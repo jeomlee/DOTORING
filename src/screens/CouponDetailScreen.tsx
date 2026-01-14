@@ -1,14 +1,6 @@
 // src/screens/CouponDetailScreen.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  Alert,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  Share,
-} from 'react-native';
+import { View, Text, Alert, ScrollView, Image, TouchableOpacity, Share } from 'react-native';
 import dayjs from 'dayjs';
 import ImageViewing from 'react-native-image-viewing';
 import * as Sharing from 'expo-sharing';
@@ -24,13 +16,10 @@ import DotoButton from '../components/DotoButton';
 import { resolveCouponImageUrl } from '../utils/imageUrls';
 
 // ✅ 알림 유틸 (leadDays/user_settings 반영)
-import {
-  scheduleCouponNotification,
-  cancelCouponNotification,
-} from '../utils/couponNotifications';
+import { scheduleCouponNotification, cancelCouponNotification } from '../utils/couponNotifications';
 
-// ✅ DB + Storage까지 삭제
-import { deleteCouponFully } from '../utils/couponDelete';
+// ✅ DB + Storage + 알림까지 삭제
+import { deleteCouponFully } from '../utils/deleteCouponFully';
 
 type Coupon = {
   id: string;
@@ -43,13 +32,9 @@ type Coupon = {
   resolvedImageUrl?: string | null;
 };
 
-type Props = {
-  route: any;
-  navigation: any;
-};
+type Props = { route: any; navigation: any };
 
 export default function CouponDetailScreen({ route, navigation }: Props) {
-  // ✅ 방어: params가 없을 수도 있음
   const couponId: string | undefined = route?.params?.couponId;
 
   const [coupon, setCoupon] = useState<Coupon | null>(null);
@@ -57,7 +42,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
   const [updating, setUpdating] = useState(false);
   const [sharing, setSharing] = useState(false);
 
-  // 풀스크린 이미지 뷰어
   const [isImageViewerVisible, setImageViewerVisible] = useState(false);
 
   const fetchCoupon = useCallback(async () => {
@@ -67,11 +51,7 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     }
 
     setLoading(true);
-    const { data, error } = await supabase
-      .from('coupons')
-      .select('*')
-      .eq('id', couponId)
-      .single();
+    const { data, error } = await supabase.from('coupons').select('*').eq('id', couponId).single();
 
     if (error || !data) {
       Alert.alert('오류', error?.message ?? '쿠폰을 불러오지 못했어요.');
@@ -81,7 +61,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
 
     const typed = data as Coupon;
 
-    // ✅ resolve 실패해도 화면은 뜨게
     let resolvedImageUrl: string | null = null;
     try {
       resolvedImageUrl = await resolveCouponImageUrl(typed.image_url);
@@ -98,7 +77,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     fetchCoupon();
   }, [fetchCoupon]);
 
-  // ✅ couponId 자체가 없으면 크래시 방지
   if (!couponId) {
     return (
       <ScreenContainer>
@@ -138,24 +116,15 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
   const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-DAY' : '만료됨';
 
   const statusColor =
-    coupon.status === 'used'
-      ? colors.accent
-      : diff < 0
-      ? '#C65B5B'
-      : colors.primary;
+    coupon.status === 'used' ? colors.accent : diff < 0 ? '#C65B5B' : colors.primary;
 
   const displayImageUri = coupon.resolvedImageUrl ?? coupon.image_url ?? null;
 
-  // ✅ 상태 토글 + 알림 갱신 (기존 유지)
   const handleToggleStatus = async () => {
     const nextStatus = coupon.status === 'used' ? 'active' : 'used';
 
     setUpdating(true);
-    const { error } = await supabase
-      .from('coupons')
-      .update({ status: nextStatus })
-      .eq('id', coupon.id);
-
+    const { error } = await supabase.from('coupons').update({ status: nextStatus }).eq('id', coupon.id);
     setUpdating(false);
 
     if (error) {
@@ -182,7 +151,7 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  // ✅ 삭제: DB + Storage 이미지까지 삭제 (화면 구성은 그대로)
+  // ✅ 삭제: DB + Storage + 로컬 알림까지 삭제
   const handleDelete = async () => {
     Alert.alert('정말 삭제할까요?', '이 도토리는 되돌릴 수 없어요.', [
       { text: '취소', style: 'cancel' },
@@ -192,7 +161,12 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
         onPress: async () => {
           try {
             setUpdating(true);
-            await deleteCouponFully(coupon.id);
+
+            await deleteCouponFully({
+              couponId: coupon.id,
+              image_url: coupon.image_url,
+            });
+
             setUpdating(false);
             navigation.goBack();
           } catch (e: any) {
@@ -205,19 +179,12 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     ]);
   };
 
-  /**
-   * ✅ 공유하기 (기존 유지)
-   * - 이미지 있으면: URL -> 캐시 다운로드 -> 파일 공유(expo-sharing)
-   * - 이미지 없으면: 텍스트 공유(Share.share)
-   */
   const handleShare = async () => {
     try {
       setSharing(true);
 
       const title = coupon.title || '쿠폰';
-      const expireText = expire.isValid()
-        ? expire.format('YYYY년 MM월 DD일')
-        : coupon.expire_date;
+      const expireText = expire.isValid() ? expire.format('YYYY년 MM월 DD일') : coupon.expire_date;
 
       const statusText =
         diff < 0 ? '❌ 상태: 만료됨' : coupon.status === 'used' ? '✅ 상태: 사용완료' : '✨ 상태: 사용가능';
@@ -256,9 +223,7 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
       const download = await FileSystem.downloadAsync(resolvedUri, fileUri);
 
       const info = await FileSystem.getInfoAsync(download.uri);
-      if (!info.exists) {
-        throw new Error('이미지 파일을 저장하지 못했어요.');
-      }
+      if (!info.exists) throw new Error('이미지 파일을 저장하지 못했어요.');
 
       await Sharing.shareAsync(download.uri, {
         dialogTitle: '쿠폰 공유하기',
@@ -280,7 +245,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
-        {/* 헤더 */}
         <View style={{ marginBottom: 16 }}>
           <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>
             도토리 상세 보기 🔍
@@ -290,9 +254,7 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
           </Text>
         </View>
 
-        {/* 메인 카드 */}
         <SectionCard>
-          {/* 이미지 (터치하면 풀스크린) */}
           {displayImageUri ? (
             <>
               <TouchableOpacity
@@ -322,7 +284,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
             </>
           ) : null}
 
-          {/* 카테고리 */}
           {coupon.category ? (
             <View
               style={{
@@ -340,12 +301,10 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
             </View>
           ) : null}
 
-          {/* 제목 */}
           <Text style={{ fontSize: 18, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 6 }}>
             {coupon.title}
           </Text>
 
-          {/* 만료일 & D-day */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
             <View>
               <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 2 }}>만료일</Text>
@@ -362,7 +321,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
             </View>
           </View>
 
-          {/* 상태 */}
           <View style={{ marginTop: 12 }}>
             <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 4 }}>상태</Text>
             <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: statusColor }}>
@@ -370,7 +328,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
             </Text>
           </View>
 
-          {/* 메모 */}
           {coupon.memo ? (
             <View style={{ marginTop: 14 }}>
               <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 4 }}>메모</Text>
@@ -379,13 +336,11 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
           ) : null}
         </SectionCard>
 
-        {/* 액션 카드 */}
         <SectionCard>
           <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 8 }}>
             행동하기 🪵
           </Text>
 
-          {/* ✅ 공유하기 버튼 (유지) */}
           <DotoButton
             title={sharing ? '공유 준비 중...' : '📤 공유하기 (이미지)'}
             onPress={handleShare}
@@ -403,6 +358,7 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
           <DotoButton
             title="도토리 삭제하기"
             onPress={handleDelete}
+            disabled={updating}
             style={{ backgroundColor: '#C65B5B' }}
           />
         </SectionCard>

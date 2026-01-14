@@ -42,8 +42,7 @@ async function ensureNotifPermissionIfNeeded(): Promise<boolean> {
     const perm = await Notifications.getPermissionsAsync();
     if (perm.status === 'granted') return true;
 
-    // 여기서 요청까지 해도 되지만, “자동 재스케줄” 상황에선 UX가 튀니까
-    // 권한 요청은 SettingsScreen에서 스위치 ON 할 때만 하게 두는 게 더 안전.
+    // 권한 요청은 SettingsScreen에서 스위치 ON 할 때만 하게 두는 게 안전.
     return false;
   } catch {
     return false;
@@ -228,7 +227,7 @@ export async function rescheduleAllCouponNotifications() {
 
     if (!userId) return { ok: false, error: 'no_user' };
 
-    // ✅ 권한이 없으면(특히 iOS) 굳이 전체를 스케줄하지 말고 정리만
+    // ✅ 권한이 없으면 굳이 전체를 스케줄하지 말고 정리만
     const permOk = await ensureNotifPermissionIfNeeded();
     if (!permOk) {
       await cancelAllLocalCouponNotifications();
@@ -298,5 +297,33 @@ export async function cancelAllLocalCouponNotifications() {
   } catch (e: any) {
     console.log('[couponNotifications] cancelAllLocalCouponNotifications error:', e?.message ?? e);
     return { ok: false, error: e?.message ?? 'cancel_all_failed' };
+  }
+}
+
+/**
+ * ✅ (추가) 로그아웃/세션 종료 시 "알림 0개 보장" 하드 리셋
+ * - OS 레벨 스케줄 전체 취소 (앱이 예약한 모든 스케줄 알림)
+ * - AsyncStorage에 저장된 쿠폰 알림 ID 키도 정리
+ */
+export async function hardResetAllScheduledNotifications() {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch {}
+
+  try {
+    await cancelAllLocalCouponNotifications();
+  } catch {}
+}
+
+/**
+ * ✅ (추가) 디버그용: 지금 스케줄된 알림 개수/목록 확인
+ * - 개발 중 확인용. 배포 시 지워도 됨.
+ */
+export async function debugGetScheduledNotifications() {
+  try {
+    const list = await Notifications.getAllScheduledNotificationsAsync();
+    return { ok: true, count: list.length, list };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'debug_failed' };
   }
 }

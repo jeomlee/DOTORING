@@ -32,7 +32,6 @@ function parseParamsFromUrl(url: string): Record<string, string> {
 
     const queryPart =
       qIndex >= 0 ? url.slice(qIndex + 1, hIndex >= 0 ? hIndex : undefined) : '';
-
     const hashPart = hIndex >= 0 ? url.slice(hIndex + 1) : '';
 
     const consume = (s: string) => {
@@ -96,8 +95,8 @@ export default function AuthLandingScreen({ navigation }: any) {
   const endStatus = () => setStatusMsg(null);
 
   /**
-   * ✅ Google: Web OAuth (Browser session) 유지
-   * - Apple은 네이티브로 별도 처리 (handleAppleNative)
+   * ✅ Google: Web OAuth (Browser session)
+   * - queryParams.prompt = select_account → 매번 계정 선택 화면 유도
    */
   const handleGoogleOAuth = async () => {
     if (lockRef.current) return;
@@ -115,6 +114,11 @@ export default function AuthLandingScreen({ navigation }: any) {
         options: {
           redirectTo: OAUTH_REDIRECT_TO,
           skipBrowserRedirect: true,
+
+          // ✅ 핵심: 계정 선택 화면 강제
+          queryParams: {
+            prompt: 'select_account',
+          },
         },
       });
 
