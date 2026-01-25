@@ -2,7 +2,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
   Alert,
   RefreshControl,
   TouchableOpacity,
@@ -23,6 +22,7 @@ import { supabase } from '../api/supabaseClient';
 import { colors } from '../theme';
 import ScreenContainer from '../components/ScreenContainer';
 import DotoButton from '../components/DotoButton';
+import DotoText from '../components/DotoText';
 
 import { resolveCouponImageUrl } from '../utils/imageUrls';
 
@@ -55,8 +55,8 @@ const FETCH_LIMIT = 250;
 // ✅ 성능 상수 (UI 영향 없음)
 const FETCH_COOLDOWN_MS = 2500; // 포커스 왕복 중복 fetch 방지
 const SETTINGS_TTL_MS = 60_000; // leadDays 설정 1분 캐시
-const PREFETCH_COUNT = 8;       // 오늘 화면에서 미리 resolve할 최대 개수
-const RESOLVE_CONCURRENCY = 2;  // 동시 resolve 제한(네트워크 튐 방지)
+const PREFETCH_COUNT = 8; // 오늘 화면에서 미리 resolve할 최대 개수
+const RESOLVE_CONCURRENCY = 2; // 동시 resolve 제한(네트워크 튐 방지)
 
 const StatBox = ({
   title,
@@ -89,13 +89,17 @@ const StatBox = ({
           borderColor: '#EFE7DF',
         }}
       >
-        <Text style={{ fontSize: 12, color: colors.subtext }}>{title}</Text>
+        <DotoText style={{ fontSize: 12, color: colors.subtext }} numberOfLines={1} ellipsizeMode="tail">
+          {title}
+        </DotoText>
 
         <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 8 }}>
-          <Text style={{ fontSize: 22, fontFamily: 'PretendardBold', color: toneStyle.color }}>
+          <DotoText style={{ fontSize: 22, fontFamily: 'PretendardBold', color: toneStyle.color }} numberOfLines={1}>
             {value}
-          </Text>
-          <Text style={{ marginLeft: 6, fontSize: 12, color: colors.subtext }}>개</Text>
+          </DotoText>
+          <DotoText style={{ marginLeft: 6, fontSize: 12, color: colors.subtext }} numberOfLines={1}>
+            개
+          </DotoText>
         </View>
 
         <View style={{ marginTop: 8 }}>
@@ -108,9 +112,9 @@ const StatBox = ({
               paddingVertical: 4,
             }}
           >
-            <Text style={{ fontSize: 11, fontFamily: 'PretendardBold', color: toneStyle.color }}>
+            <DotoText style={{ fontSize: 11, fontFamily: 'PretendardBold', color: toneStyle.color }} numberOfLines={1}>
               {hint}
-            </Text>
+            </DotoText>
           </View>
         </View>
       </View>
@@ -212,7 +216,6 @@ export default function TodayScreen({ navigation }: Props) {
 
   /**
    * ✅ 동시성 제한된 resolve runner (UI 변화 없음)
-   * - 순차 await는 안전하지만 느릴 수 있어 2개 동시로 제한
    */
   const resolveManyLimited = useCallback(
     async (items: Coupon[]) => {
@@ -255,7 +258,6 @@ export default function TodayScreen({ navigation }: Props) {
         const raw = s?.notify_lead_days;
         if (typeof raw === 'number' && [1, 3, 7, 10, 30].includes(raw)) {
           lead = raw as LeadDays;
-          // state 갱신은 여기서(필요할 때만)
           setLeadDays(lead);
         }
       } catch {}
@@ -271,10 +273,7 @@ export default function TodayScreen({ navigation }: Props) {
       const now = Date.now();
 
       if (!force) {
-        if (now - lastFetchAtRef.current < FETCH_COOLDOWN_MS) {
-          // 너무 잦은 포커스 왕복이면 스킵
-          return;
-        }
+        if (now - lastFetchAtRef.current < FETCH_COOLDOWN_MS) return;
         if (inFlightFetchRef.current) {
           await inFlightFetchRef.current;
           return;
@@ -293,10 +292,8 @@ export default function TodayScreen({ navigation }: Props) {
           return;
         }
 
-        // ✅ leadDays: TTL 캐시로 과호출 방지
         const lead = await loadLeadDaysCached(user.id);
 
-        // ✅ Today는 “사용 가능 & 아직 만료 안된 것”만
         const todayStr = dayjs().format('YYYY-MM-DD');
 
         const { data, error } = await supabase
@@ -327,7 +324,6 @@ export default function TodayScreen({ navigation }: Props) {
         setLoading(false);
         lastFetchAtRef.current = Date.now();
 
-        // ✅ “오늘 화면 체감”에 필요한 것만 resolve (과부하 방지)
         try {
           const usable = list;
 
@@ -341,7 +337,6 @@ export default function TodayScreen({ navigation }: Props) {
           if (top) targets.push(top);
           targets.push(...soon.slice(0, PREFETCH_COUNT));
 
-          // ✅ 제한된 동시성 resolve
           await resolveManyLimited(targets);
         } catch (e: any) {
           console.log('[Today] pre-resolve error:', e?.message ?? e);
@@ -356,7 +351,6 @@ export default function TodayScreen({ navigation }: Props) {
     [loadLeadDaysCached, resolveManyLimited, today]
   );
 
-  // ✅ 포커스 단일 진입점 + 중복방지 로직 내장
   useFocusEffect(
     useCallback(() => {
       fetchData(false);
@@ -426,7 +420,6 @@ export default function TodayScreen({ navigation }: Props) {
     [soonList, showAllSoon]
   );
 
-  // ✅ showAllSoon 토글 시 “새로 보이는 것들”만 resolve (이미 캐시/중복방지 있음)
   React.useEffect(() => {
     const targets = [topPriority, ...soonVisible].filter(Boolean) as Coupon[];
     (async () => {
@@ -541,40 +534,69 @@ export default function TodayScreen({ navigation }: Props) {
               ) : (
                 <>
                   <Ionicons name="image-outline" size={26} color={colors.subtext} />
-                  <Text style={{ fontSize: 11, marginTop: 6, color: colors.subtext }}>이미지 없음</Text>
+                  <DotoText style={{ fontSize: 11, marginTop: 6, color: colors.subtext }} numberOfLines={1}>
+                    이미지 없음
+                  </DotoText>
                 </>
               )}
             </View>
 
             <View style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'space-between' }}>
               <View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: '#F2E6D7', alignSelf: 'flex-start' }}>
-                    <Text style={{ fontSize: 11, fontFamily: 'PretendardBold', color: colors.text }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 6,
+                  }}
+                >
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 999,
+                      backgroundColor: '#F2E6D7',
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <DotoText style={{ fontSize: 11, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
                       {item.category || '기타'}
-                    </Text>
+                    </DotoText>
                   </View>
 
                   <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: badgeBg }}>
-                    <Text style={{ fontSize: 11, fontFamily: 'PretendardBold', color }}>{label}</Text>
+                    <DotoText style={{ fontSize: 11, fontFamily: 'PretendardBold', color }} numberOfLines={1}>
+                      {label}
+                    </DotoText>
                   </View>
                 </View>
 
-                <Text numberOfLines={2} style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 4 }}>
+                <DotoText
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                  style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 4, lineHeight: 20 }}
+                >
                   {item.title}
-                </Text>
+                </DotoText>
 
                 {item.memo ? (
-                  <Text numberOfLines={1} style={{ fontSize: 12, color: colors.subtext }}>{item.memo}</Text>
+                  <DotoText numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 12, color: colors.subtext }}>
+                    {item.memo}
+                  </DotoText>
                 ) : (
-                  <Text numberOfLines={1} style={{ fontSize: 12, color: '#B3A89C' }}>메모를 남겨두면 나중에 더 편해요.</Text>
+                  <DotoText numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 12, color: '#B3A89C' }}>
+                    메모를 남겨두면 나중에 더 편해요.
+                  </DotoText>
                 )}
               </View>
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="calendar-outline" size={14} color={colors.subtext} style={{ marginRight: 4 }} />
-                  <Text style={{ fontSize: 12, color: colors.subtext }}>{expireText} 까지</Text>
+                  <DotoText numberOfLines={1} style={{ fontSize: 12, color: colors.subtext }}>
+                    {expireText} 까지
+                  </DotoText>
                 </View>
               </View>
             </View>
@@ -601,22 +623,28 @@ export default function TodayScreen({ navigation }: Props) {
             alignItems: 'flex-end',
           }}
         >
-          <View>
-            <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <DotoText style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
               오늘 할 일
-            </Text>
-            <Text style={{ marginTop: 4, fontSize: 12, color: colors.subtext }}>
+            </DotoText>
+            <DotoText
+              style={{ marginTop: 4, fontSize: 12, color: colors.subtext }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {dayjs().format('YYYY.MM.DD')} · 임박 기준: {leadLabel}
-            </Text>
+            </DotoText>
           </View>
 
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => navigation.navigate('Settings')}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            style={{ flexDirection: 'row', alignItems: 'center' }}
           >
             <Ionicons name="settings-outline" size={18} color={colors.subtext} />
-            <Text style={{ fontSize: 12, color: colors.subtext }}>설정</Text>
+            <DotoText style={{ marginLeft: 6, fontSize: 12, color: colors.subtext }} numberOfLines={1}>
+              설정
+            </DotoText>
           </TouchableOpacity>
         </View>
 
@@ -641,12 +669,13 @@ export default function TodayScreen({ navigation }: Props) {
               justifyContent: 'center',
               borderWidth: 1,
               borderColor: '#E6DED5',
+              paddingVertical: 8, // ✅ 작은 글자 커져도 버티게
             }}
           >
             <Ionicons name="file-tray-full-outline" size={18} color={colors.text} />
-            <Text style={{ marginTop: 2, fontSize: 10, color: colors.text, fontFamily: 'PretendardBold' }}>
+            <DotoText style={{ marginTop: 2, fontSize: 10, color: colors.text, fontFamily: 'PretendardBold' }} numberOfLines={1}>
               함
-            </Text>
+            </DotoText>
           </TouchableOpacity>
         </View>
 
@@ -677,16 +706,18 @@ export default function TodayScreen({ navigation }: Props) {
 
         {/* 오늘의 1순위 */}
         <View style={{ paddingHorizontal: 12, marginTop: 16 }}>
-          <Text style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text }}>
+          <DotoText style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
             오늘의 1순위
-          </Text>
+          </DotoText>
         </View>
 
         <View style={{ paddingHorizontal: 8 }}>
           {loading ? (
             <View style={{ paddingVertical: 18, alignItems: 'center' }}>
               <ActivityIndicator />
-              <Text style={{ marginTop: 8, color: colors.subtext }}>불러오는 중...</Text>
+              <DotoText style={{ marginTop: 8, color: colors.subtext }} numberOfLines={1}>
+                불러오는 중...
+              </DotoText>
             </View>
           ) : !topPriority ? (
             <View style={{ paddingHorizontal: 4, marginTop: 10 }}>
@@ -699,12 +730,12 @@ export default function TodayScreen({ navigation }: Props) {
                   borderColor: '#EFE7DF',
                 }}
               >
-                <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }}>
+                <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
                   급한 도토리가 없어요.
-                </Text>
-                <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext }}>
+                </DotoText>
+                <DotoText style={{ marginTop: 6, fontSize: 12, color: colors.subtext }} numberOfLines={1} ellipsizeMode="tail">
                   필요한 날만 들어와도 충분해요.
-                </Text>
+                </DotoText>
               </View>
             </View>
           ) : (
@@ -715,12 +746,12 @@ export default function TodayScreen({ navigation }: Props) {
         {/* 임박 리스트 */}
         <View style={{ paddingHorizontal: 12, marginTop: 18 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <Text style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text }}>
+            <DotoText style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
               임박한 도토리
-            </Text>
-            <Text style={{ fontSize: 12, color: colors.subtext }}>
+            </DotoText>
+            <DotoText style={{ fontSize: 12, color: colors.subtext }} numberOfLines={1}>
               {leadDays}일 이내 {soonList.length}개
-            </Text>
+            </DotoText>
           </View>
 
           <View style={{ marginTop: 8 }}>
@@ -734,12 +765,12 @@ export default function TodayScreen({ navigation }: Props) {
                   borderColor: '#EFE7DF',
                 }}
               >
-                <Text style={{ fontSize: 13, fontFamily: 'PretendardBold', color: colors.text }}>
+                <DotoText style={{ fontSize: 13, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
                   임박한 도토리가 없어요.
-                </Text>
-                <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext }}>
+                </DotoText>
+                <DotoText style={{ marginTop: 6, fontSize: 12, color: colors.subtext }} numberOfLines={1} ellipsizeMode="tail">
                   설정한 기준({leadDays}일 이내)에서는 여유롭네요.
-                </Text>
+                </DotoText>
               </View>
             ) : (
               <>
@@ -765,9 +796,9 @@ export default function TodayScreen({ navigation }: Props) {
                   marginTop: 6,
                 }}
               >
-                <Text style={{ fontSize: 12, fontFamily: 'PretendardBold', color: colors.text }}>
+                <DotoText style={{ fontSize: 12, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
                   {showAllSoon ? '접기' : `더 보기 (+${soonList.length - 5})`}
-                </Text>
+                </DotoText>
               </TouchableOpacity>
             )}
           </View>
@@ -785,9 +816,9 @@ export default function TodayScreen({ navigation }: Props) {
                 borderColor: '#EFE7DF',
               }}
             >
-              <Text style={{ fontSize: 12, color: colors.subtext }}>
+              <DotoText style={{ fontSize: 12, color: colors.subtext }} numberOfLines={2} ellipsizeMode="tail">
                 * “임박”은 설정한 알림 시점(현재 {leadDays}일 전)을 기준으로 자동 계산돼요.
-              </Text>
+              </DotoText>
             </View>
           </View>
         )}
@@ -813,9 +844,9 @@ export default function TodayScreen({ navigation }: Props) {
               borderRadius: 999,
             }}
           >
-            <Text style={{ color: '#FFF', fontSize: 12, fontFamily: 'PretendardBold' }}>
+            <DotoText style={{ color: '#FFF', fontSize: 12, fontFamily: 'PretendardBold' }} numberOfLines={2} ellipsizeMode="tail">
               {toast}
-            </Text>
+            </DotoText>
           </View>
         </Animated.View>
       )}

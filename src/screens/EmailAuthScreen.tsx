@@ -71,7 +71,6 @@ export default function EmailAuthScreen({ navigation }: any) {
     const rawPw = password;
     const pw = password.trim();
 
-    // ✅ 공통 디버그 로그
     console.log('[EmailAuth] submit', {
       mode,
       email: trimmedEmail,
@@ -83,10 +82,9 @@ export default function EmailAuthScreen({ navigation }: any) {
       if (mode === 'login') {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: trimmedEmail,
-          password: rawPw, // ✅ trim 하지 않음 (사용자가 입력한 그대로)
+          password: rawPw, // ✅ trim 하지 않음
         });
 
-        // ✅ 상세 로그
         console.log('[EmailAuth] signInWithPassword data:', data);
         console.log('[EmailAuth] signInWithPassword error:', error);
 
@@ -103,13 +101,10 @@ export default function EmailAuthScreen({ navigation }: any) {
           return;
         }
 
-        // ✅ 로그인 성공 시 현재 유저/세션 확인 로그
         const { data: s } = await supabase.auth.getSession();
         const { data: u } = await supabase.auth.getUser();
         console.log('[EmailAuth] session after login:', !!s.session, s.session?.user?.email);
         console.log('[EmailAuth] user after login:', u.user?.email, u.user?.id);
-
-        // 네비게이션은 App.tsx에서 session 상태로 갈리므로 여기서 강제 이동 X
       } else {
         if (pw.length < MIN_PASSWORD_LEN) {
           setError(`비밀번호는 최소 ${MIN_PASSWORD_LEN}자 이상이어야 합니다.`);
@@ -119,10 +114,8 @@ export default function EmailAuthScreen({ navigation }: any) {
         const { data, error } = await supabase.auth.signUp({
           email: trimmedEmail,
           password: pw,
-          // options: { emailRedirectTo: 'https://.../auth/confirm' } // 필요 시 추가
         });
 
-        // ✅ 상세 로그
         console.log('[EmailAuth] signUp data:', data);
         console.log('[EmailAuth] signUp error:', error);
 
@@ -143,16 +136,13 @@ export default function EmailAuthScreen({ navigation }: any) {
 
   return (
     <ScreenContainer>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* 상단 */}
         <View style={{ marginTop: 16, marginBottom: 12 }}>
-          <Text style={{ fontSize: 18, fontFamily: 'PretendardBold', color: colors.text }}>
+          <Text allowFontScaling={false} style={{ fontSize: 18, fontFamily: 'PretendardBold', color: colors.text }}>
             {mode === 'login' ? '이메일로 로그인' : '이메일로 회원가입'}
           </Text>
-          <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext }}>
+          <Text allowFontScaling={false} style={{ marginTop: 6, fontSize: 12, color: colors.subtext }}>
             {mode === 'login'
               ? '계정이 없으시면 회원가입으로 전환해 주세요.'
               : '가입 후 이메일 인증을 완료해야 로그인할 수 있습니다.'}
@@ -161,10 +151,11 @@ export default function EmailAuthScreen({ navigation }: any) {
 
         {/* 폼 */}
         <SectionCard style={{ paddingTop: 16, paddingBottom: 14 }}>
-          <Text style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
+          <Text allowFontScaling={false} style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
             이메일
           </Text>
           <TextInput
+            allowFontScaling={false}
             autoCapitalize="none"
             keyboardType="email-address"
             value={email}
@@ -187,10 +178,11 @@ export default function EmailAuthScreen({ navigation }: any) {
             }}
           />
 
-          <Text style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
+          <Text allowFontScaling={false} style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
             비밀번호
           </Text>
           <TextInput
+            allowFontScaling={false}
             value={password}
             onChangeText={(v) => {
               setPassword(v);
@@ -215,10 +207,11 @@ export default function EmailAuthScreen({ navigation }: any) {
 
           {mode === 'signup' && (
             <>
-              <Text style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
+              <Text allowFontScaling={false} style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
                 비밀번호 확인
               </Text>
               <TextInput
+                allowFontScaling={false}
                 value={passwordCheck}
                 onChangeText={(v) => {
                   setPasswordCheck(v);
@@ -246,12 +239,9 @@ export default function EmailAuthScreen({ navigation }: any) {
           {/* ✅ 로그인 모드에서만 “비밀번호 찾기” 페이지로 이동 */}
           {mode === 'login' && (
             <View style={{ marginTop: 6, alignItems: 'flex-end' }}>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ForgotPassword')}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} disabled={loading} activeOpacity={0.8}>
                 <Text
+                  allowFontScaling={false}
                   style={{
                     fontSize: 12,
                     color: colors.primary,
@@ -268,6 +258,7 @@ export default function EmailAuthScreen({ navigation }: any) {
           {msg && (
             <View style={{ marginTop: 10 }}>
               <Text
+                allowFontScaling={false}
                 style={{
                   fontSize: 12,
                   color: msgType === 'error' ? '#C65B5B' : colors.accent,
@@ -301,13 +292,15 @@ export default function EmailAuthScreen({ navigation }: any) {
               disabled={loading}
               activeOpacity={0.8}
             >
-              <Text style={{ fontSize: 12, color: colors.primary, fontFamily: 'PretendardBold' }}>
+              <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.primary, fontFamily: 'PretendardBold' }}>
                 {mode === 'login' ? '처음이신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 10 }}>
-              <Text style={{ fontSize: 12, color: colors.subtext }}>← 다른 방법 선택하기</Text>
+              <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.subtext }}>
+                ← 다른 방법 선택하기
+              </Text>
             </TouchableOpacity>
           </View>
         </SectionCard>

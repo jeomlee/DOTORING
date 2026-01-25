@@ -2,12 +2,10 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
-  Text,
   Alert,
   RefreshControl,
   TouchableOpacity,
   Animated,
-  TextInput,
   ActivityIndicator,
 } from 'react-native';
 import dayjs from 'dayjs';
@@ -20,6 +18,8 @@ import { supabase } from '../api/supabaseClient';
 import { colors } from '../theme';
 import ScreenContainer from '../components/ScreenContainer';
 import DotoButton from '../components/DotoButton';
+import DotoText from '../components/DotoText';
+import DotoTextInput from '../components/DotoTextInput';
 import { resolveCouponImageUrl } from '../utils/imageUrls';
 import { deleteCouponFully } from '../utils/deleteCouponFully';
 
@@ -60,7 +60,6 @@ export default function DotorihamScreen({ navigation }: Props) {
   const openSwipeRef = useRef<Swipeable | null>(null);
 
   // ✅ signed URL 캐시 (image_url key -> signedUrl or null)
-  //    null도 캐시해서 실패 반복 호출 방지
   const signedUrlCacheRef = useRef<Map<string, string | null>>(new Map());
 
   // ✅ 중복 resolve 방지
@@ -73,7 +72,6 @@ export default function DotorihamScreen({ navigation }: Props) {
     openSwipeRef.current = null;
   }, []);
 
-  // ✅ “id 기반”으로 displayImageUrl만 업데이트 (필터/검색/정렬에 안전)
   const updateDisplayUrlById = useCallback((couponId: string, displayUrl: string | null) => {
     setCoupons((prev) => {
       const idx = prev.findIndex((c) => c.id === couponId);
@@ -88,28 +86,19 @@ export default function DotorihamScreen({ navigation }: Props) {
     });
   }, []);
 
-  /**
-   * ✅ 핵심: visible item들만 signed url resolve (UI/레이아웃 변화 없음, 성능만 개선)
-   * - 캐시 hit면 즉시 state patch
-   * - resolve 중복 방지
-   * - 실패(null)도 캐시해서 반복 호출 방지
-   */
   const ensureImageResolved = useCallback(
     async (item: Coupon) => {
       const key = item.image_url ?? null;
       if (!key) return;
 
-      // 이미 화면에 붙어있으면 끝
       if (item.displayImageUrl) return;
 
-      // 캐시 hit (null도 포함)
       if (signedUrlCacheRef.current.has(key)) {
         const cached = signedUrlCacheRef.current.get(key) ?? null;
         updateDisplayUrlById(item.id, cached);
         return;
       }
 
-      // 이미 resolve 중이면 중복 호출 방지
       if (resolvingRef.current.has(key)) return;
       resolvingRef.current.add(key);
 
@@ -175,8 +164,6 @@ export default function DotorihamScreen({ navigation }: Props) {
       return dayjs(a.expire_date).diff(dayjs(b.expire_date), 'day');
     });
 
-    // ✅ 여기서 전부 resolve 하지 않음 (성능)
-    // ✅ 대신 “캐시에 있는 것만” 즉시 붙여서 초기 미리보기도 빠르게
     const withCachedImages = sorted.map((item) => {
       const key = item.image_url ?? null;
       if (!key) return { ...item, displayImageUrl: null };
@@ -204,7 +191,6 @@ export default function DotorihamScreen({ navigation }: Props) {
     setRefreshing(false);
   }, [fetchCoupons]);
 
-  // ✅ 필터링 로직 그대로 유지
   const filteredCoupons = useMemo(() => {
     return coupons.filter((c) => {
       if (searchText.trim()) {
@@ -285,10 +271,8 @@ export default function DotorihamScreen({ navigation }: Props) {
           onPress: async () => {
             closeOpenSwipe();
 
-            // ✅ 1) UI 즉시 제거
             setCoupons((prev) => prev.filter((c) => c.id !== item.id));
 
-            // ✅ 2) 실제 삭제
             try {
               await deleteCouponFully({ couponId: item.id, image_url: item.image_url });
               if (item.image_url) signedUrlCacheRef.current.delete(item.image_url);
@@ -318,15 +302,14 @@ export default function DotorihamScreen({ navigation }: Props) {
         }}
       >
         <Ionicons name="trash-outline" size={18} color="#fff" />
-        <Text style={{ marginTop: 4, fontSize: 12, fontFamily: 'PretendardBold', color: '#fff' }}>
+        <DotoText style={{ marginTop: 4, fontSize: 12, fontFamily: 'PretendardBold', color: '#fff' }} numberOfLines={1}>
           삭제
-        </Text>
+        </DotoText>
       </TouchableOpacity>
     ),
     [onDelete]
   );
 
-  // ✅ 세그먼트 count 계산 memo 유지
   const segmentCounts = useMemo(() => {
     const activeCount = coupons.filter(
       (c) => c.status !== 'used' && dayjs(c.expire_date).diff(today, 'day') >= 0
@@ -413,14 +396,23 @@ export default function DotorihamScreen({ navigation }: Props) {
                   ) : (
                     <>
                       <Ionicons name="image-outline" size={26} color={colors.subtext} />
-                      <Text style={{ fontSize: 11, marginTop: 6, color: colors.subtext }}>이미지 없음</Text>
+                      <DotoText style={{ fontSize: 11, marginTop: 6, color: colors.subtext }} numberOfLines={1}>
+                        이미지 없음
+                      </DotoText>
                     </>
                   )}
                 </View>
 
                 <View style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'space-between' }}>
                   <View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 6,
+                      }}
+                    >
                       <View
                         style={{
                           paddingHorizontal: 8,
@@ -430,38 +422,50 @@ export default function DotorihamScreen({ navigation }: Props) {
                           alignSelf: 'flex-start',
                         }}
                       >
-                        <Text style={{ fontSize: 11, fontFamily: 'PretendardBold', color: colors.text }}>
+                        <DotoText style={{ fontSize: 11, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
                           {item.category || '기타'}
-                        </Text>
+                        </DotoText>
                       </View>
 
                       <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: badgeBg }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'PretendardBold', color }}>{label}</Text>
+                        <DotoText style={{ fontSize: 11, fontFamily: 'PretendardBold', color }} numberOfLines={1}>
+                          {label}
+                        </DotoText>
                       </View>
                     </View>
 
-                    <Text numberOfLines={2} style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 4 }}>
+                    <DotoText
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                      style={{ fontSize: 15, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 4, lineHeight: 20 }}
+                    >
                       {item.title}
-                    </Text>
+                    </DotoText>
 
                     {item.memo ? (
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: colors.subtext }}>
+                      <DotoText numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 12, color: colors.subtext }}>
                         {item.memo}
-                      </Text>
+                      </DotoText>
                     ) : (
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: '#B3A89C' }}>
+                      <DotoText numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 12, color: '#B3A89C' }}>
                         메모를 남겨두면 나중에 더 편해요.
-                      </Text>
+                      </DotoText>
                     )}
                   </View>
 
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 }}>
                       <Ionicons name="calendar-outline" size={14} color={colors.subtext} style={{ marginRight: 4 }} />
-                      <Text style={{ fontSize: 12, color: colors.subtext }}>{expireText} 까지</Text>
+                      <DotoText numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 12, color: colors.subtext }}>
+                        {expireText} 까지
+                      </DotoText>
                     </View>
 
-                    {item.status === 'used' && <Text style={{ fontSize: 11, color: colors.accent }}>사용 완료 ✅</Text>}
+                    {item.status === 'used' && (
+                      <DotoText style={{ fontSize: 11, color: colors.accent }} numberOfLines={1}>
+                        사용 완료 ✅
+                      </DotoText>
+                    )}
                   </View>
                 </View>
               </View>
@@ -486,7 +490,15 @@ export default function DotorihamScreen({ navigation }: Props) {
 
     return (
       <View style={{ paddingHorizontal: 4, marginBottom: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E9DD', borderRadius: 999, padding: 4 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F3E9DD',
+            borderRadius: 999,
+            padding: 4,
+          }}
+        >
           {segments.map((seg) => {
             const active = statusFilter === seg.key;
             return (
@@ -501,15 +513,23 @@ export default function DotorihamScreen({ navigation }: Props) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: active ? '#FFFFFF' : 'transparent',
+                  minHeight: 44, // ✅ 폰트가 바뀌어도 영역 유지
                 }}
                 activeOpacity={0.85}
               >
-                <Text style={{ fontSize: 11, fontFamily: 'PretendardBold', color: active ? colors.text : '#8F7E6C' }}>
+                <DotoText
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={{ fontSize: 11, fontFamily: 'PretendardBold', color: active ? colors.text : '#8F7E6C' }}
+                >
                   {seg.label}
-                </Text>
-                <Text style={{ marginTop: 2, fontSize: 12, fontFamily: 'PretendardBold', color: active ? colors.primary : '#8F7E6C' }}>
+                </DotoText>
+                <DotoText
+                  numberOfLines={1}
+                  style={{ marginTop: 2, fontSize: 12, fontFamily: 'PretendardBold', color: active ? colors.primary : '#8F7E6C' }}
+                >
                   {seg.count}
-                </Text>
+                </DotoText>
               </TouchableOpacity>
             );
           })}
@@ -520,23 +540,14 @@ export default function DotorihamScreen({ navigation }: Props) {
 
   const keyExtractor = useCallback((item: Coupon) => item.id, []);
 
-  // ✅ 고정 높이 리스트 최적화 (UI 변화 없음)
   const getItemLayout = useCallback((_: any, index: number) => {
     return { length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index };
   }, []);
 
-  /**
-   * ✅ 핵심: 화면에 “보이는 아이템”만 이미지 resolve
-   * - UI 변화 없음
-   * - 네트워크/CPU 급감
-   * - id 기반 업데이트라 검색/필터/정렬에도 절대 꼬이지 않음
-   */
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: Array<{ item: Coupon }> }) => {
-      // 너무 많이 동시에 resolve하지 않게 상한(체감 상 충분)
       const targets = viewableItems.slice(0, 12).map((v) => v.item);
       targets.forEach((it) => {
-        // void로 던져도 됨
         ensureImageResolved(it);
       });
     }
@@ -546,7 +557,6 @@ export default function DotorihamScreen({ navigation }: Props) {
     viewAreaCoveragePercentThreshold: 18,
   }).current;
 
-  // ✅ 처음 화면에 뜨는 것(상단 10개 정도)은 미리 resolve해서 “이미지 없음” 깜빡임 감소
   useFocusEffect(
     useCallback(() => {
       const t = setTimeout(() => {
@@ -561,9 +571,16 @@ export default function DotorihamScreen({ navigation }: Props) {
   return (
     <ScreenContainer>
       <View style={{ flex: 1, paddingTop: 8 }}>
-        <View style={{ paddingHorizontal: 4, marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            {/* ✅ 타이틀 라인: 아이콘만 추가 (레이아웃/기능 그대로) */}
+        <View
+          style={{
+            paddingHorizontal: 4,
+            marginBottom: 6,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <View style={{ flex: 1, paddingRight: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Image
                 source={DOTORING_ICON}
@@ -571,10 +588,18 @@ export default function DotorihamScreen({ navigation }: Props) {
                 contentFit="contain"
                 cachePolicy="memory"
               />
-              <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>도토리함</Text>
+              <DotoText style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
+                도토리함
+              </DotoText>
             </View>
 
-            <Text style={{ marginTop: 4, fontSize: 12, color: colors.subtext }}>모아둔 도토리를 검색하고 정리해요.</Text>
+            <DotoText
+              style={{ marginTop: 4, fontSize: 12, color: colors.subtext }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              모아둔 도토리를 검색하고 정리해요.
+            </DotoText>
           </View>
 
           <DotoButton
@@ -585,17 +610,28 @@ export default function DotorihamScreen({ navigation }: Props) {
         </View>
 
         <View style={{ paddingHorizontal: 4, marginBottom: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E9DD', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#F3E9DD',
+              borderRadius: 999,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              minHeight: 44, // ✅ 입력/아이콘 영역 안정화
+            }}
+          >
             <Ionicons name="search-outline" size={18} color={colors.subtext} style={{ marginRight: 6 }} />
-            <TextInput
+            <DotoTextInput
               value={searchText}
               onChangeText={setSearchText}
               placeholder="제목, 카테고리, 메모 검색"
               placeholderTextColor="#B7AFA5"
               style={{ flex: 1, fontSize: 13, paddingVertical: 0, color: colors.text }}
+              returnKeyType="search"
             />
             {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchText('')}>
+              <TouchableOpacity onPress={() => setSearchText('')} activeOpacity={0.85}>
                 <Ionicons name="close-circle" size={16} color="#B2A89E" />
               </TouchableOpacity>
             )}
@@ -607,7 +643,9 @@ export default function DotorihamScreen({ navigation }: Props) {
         {loading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator />
-            <Text style={{ marginTop: 10, color: colors.subtext }}>불러오는 중...</Text>
+            <DotoText style={{ marginTop: 10, color: colors.subtext }} numberOfLines={1}>
+              불러오는 중...
+            </DotoText>
           </View>
         ) : (
           <Animated.FlatList
@@ -619,18 +657,12 @@ export default function DotorihamScreen({ navigation }: Props) {
             scrollEventThrottle={16}
             renderItem={renderItem}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-
-            // ✅ 성능 옵션 (UI 변화 없음)
             initialNumToRender={10}
             maxToRenderPerBatch={10}
             windowSize={7}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews={true}
-
-            // ✅ 고정 높이 최적화 (UI 변화 없음)
             getItemLayout={getItemLayout}
-
-            // ✅ visible 기반 이미지 resolve (UI 변화 없음)
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
           />

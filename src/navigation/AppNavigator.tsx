@@ -1,4 +1,3 @@
-// src/navigation/AppNavigator.tsx
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -7,10 +6,17 @@ import AuthNavigator from './AuthNavigator';
 
 export type AppStackParamList = {
   MainStack: undefined;
-  AuthStack: {
-    screen?: 'AuthLanding' | 'EmailAuth' | 'ForgotPassword' | 'ResetPassword' | 'PrivacyPolicy';
-    params?: any;
-  } | undefined;
+  AuthStack:
+    | {
+        screen?:
+          | 'AuthLanding'
+          | 'EmailAuth'
+          | 'ForgotPassword'
+          | 'ResetPassword'
+          | 'PrivacyPolicy';
+        params?: any;
+      }
+    | undefined;
 };
 
 const Stack = createNativeStackNavigator<AppStackParamList>();

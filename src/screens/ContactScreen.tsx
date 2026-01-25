@@ -15,6 +15,7 @@ export default function ContactScreen() {
   return (
     <ScreenContainer>
       <Text
+        allowFontScaling={false}
         style={{
           fontSize: 22,
           fontFamily: 'PretendardBold',
@@ -25,7 +26,10 @@ export default function ContactScreen() {
         문의하기 ✉️
       </Text>
 
-      <Text style={{ color: colors.subtext, marginBottom: 24 }}>
+      <Text
+        allowFontScaling={false}
+        style={{ color: colors.subtext, marginBottom: 24 }}
+      >
         불편한 점이나 제안이 있다면 언제든 편하게 연락 주세요.
       </Text>
 
@@ -38,10 +42,15 @@ export default function ContactScreen() {
           borderColor: '#E0D9CF',
         }}
       >
-        <Text style={{ fontSize: 14, color: colors.text, marginBottom: 8 }}>
+        <Text
+          allowFontScaling={false}
+          style={{ fontSize: 14, color: colors.text, marginBottom: 8 }}
+        >
           문의 이메일
         </Text>
+
         <Text
+          allowFontScaling={false}
           style={{
             fontSize: 15,
             fontFamily: 'PretendardBold',
@@ -61,7 +70,10 @@ export default function ContactScreen() {
             alignItems: 'center',
           }}
         >
-          <Text style={{ color: '#fff', fontFamily: 'PretendardBold' }}>
+          <Text
+            allowFontScaling={false}
+            style={{ color: '#fff', fontFamily: 'PretendardBold' }}
+          >
             이메일 주소 복사
           </Text>
         </Pressable>

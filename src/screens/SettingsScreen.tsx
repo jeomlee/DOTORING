@@ -2,12 +2,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   Switch,
   Alert,
   Modal,
   Pressable,
-  TextInput,
   ActivityIndicator,
   Platform,
   ScrollView,
@@ -19,11 +17,13 @@ import { supabase } from '../api/supabaseClient';
 import ScreenContainer from '../components/ScreenContainer';
 import SectionCard from '../components/SectionCard';
 import DotoButton from '../components/DotoButton';
+import DotoText from '../components/DotoText';
+import DotoTextInput from '../components/DotoTextInput';
 import { colors } from '../theme';
 
 import {
   rescheduleAllCouponNotifications,
-  cancelAllLocalCouponNotifications, // ✅ 추가
+  cancelAllLocalCouponNotifications,
 } from '../utils/couponNotifications';
 
 type ReasonKey =
@@ -43,7 +43,6 @@ const REASONS: { key: ReasonKey; label: string }[] = [
   { key: 'other', label: '기타' },
 ];
 
-// ✅ 알림 리드타임 옵션 (+10일 전 추가)
 const LEAD_OPTIONS = [
   { days: 1, label: '하루 전' },
   { days: 3, label: '3일 전' },
@@ -61,15 +60,12 @@ export default function SettingsScreen({ navigation }: any) {
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // ✅ 알림 설정값
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [leadDays, setLeadDays] = useState<LeadDays>(1);
   const [notifSaving, setNotifSaving] = useState(false);
 
-  // ✅ 로그아웃 로딩
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  // 삭제 모달
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState<1 | 2 | 3>(1);
   const [reason, setReason] = useState<ReasonKey>('too_hard');
@@ -82,7 +78,6 @@ export default function SettingsScreen({ navigation }: any) {
 
   const canProceedPassword = useMemo(() => password.trim().length >= 6, [password]);
 
-  // ✅ user_settings 저장 helper
   const saveNotifSettings = async (
     patch: Partial<{ notif_enabled: boolean; notify_lead_days: number }>
   ) => {
@@ -104,7 +99,6 @@ export default function SettingsScreen({ navigation }: any) {
     }
   };
 
-  // ✅ 알림 권한 상태 검사 (출시용 필수)
   const ensureNotifPermissionIfEnabled = async (enabledFromDb: boolean) => {
     if (!enabledFromDb) return;
 
@@ -112,11 +106,9 @@ export default function SettingsScreen({ navigation }: any) {
       const perm = await Notifications.getPermissionsAsync();
       if (perm.status === 'granted') return;
 
-      // DB는 ON인데 OS는 OFF => UX 꼬임 방지: 앱에서 OFF로 내려준다
       setNotifEnabled(false);
       await saveNotifSettings({ notif_enabled: false });
 
-      // 로컬 알림도 싹 정리
       await rescheduleAllCouponNotifications();
 
       Alert.alert(
@@ -148,7 +140,6 @@ export default function SettingsScreen({ navigation }: any) {
           }
 
           if (!s) {
-            // 없으면 생성 (기본값)
             const { error: upErr } = await supabase.from('user_settings').upsert({
               user_id: data.user.id,
               notif_enabled: true,
@@ -156,21 +147,17 @@ export default function SettingsScreen({ navigation }: any) {
               updated_at: new Date().toISOString(),
             });
             if (upErr) console.log('[user_settings] upsert error:', upErr.message);
-            // 생성 후엔 기본값으로 유지
             return;
           }
 
-          // notif_enabled
           const enabled = typeof s.notif_enabled === 'boolean' ? s.notif_enabled : true;
           setNotifEnabled(enabled);
 
-          // leadDays (10 포함 안전 처리)
           const raw = s.notify_lead_days;
           if (typeof raw === 'number' && LEAD_DAYS_SET.has(raw)) {
             setLeadDays(raw as LeadDays);
           }
 
-          // ✅ DB상 enabled=true면 OS 권한도 맞는지 확인 (꼬임 방지)
           await ensureNotifPermissionIfEnabled(enabled);
         } catch (e: any) {
           console.log('[user_settings] exception:', e?.message ?? e);
@@ -180,13 +167,12 @@ export default function SettingsScreen({ navigation }: any) {
 
     loadUserAndNotifSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]); // userId가 set된 이후 saveNotifSettings/permission 체크가 안정적으로 동작하도록
+  }, [userId]);
 
   const leadLabel = useMemo(() => {
     return LEAD_OPTIONS.find((x) => x.days === leadDays)?.label ?? '하루 전';
   }, [leadDays]);
 
-  // ✅ 알림 스위치
   const toggleNotif = async (value: boolean) => {
     setNotifEnabled(value);
 
@@ -204,21 +190,15 @@ export default function SettingsScreen({ navigation }: any) {
     }
 
     await saveNotifSettings({ notif_enabled: value });
-
-    // ✅ ON/OFF 반영해서 전체 재예약 (OFF면 로컬 스케줄 싹 정리됨)
     await rescheduleAllCouponNotifications();
   };
 
-  // ✅ 리드타임 선택 + 즉시 전체 재예약
   const selectLeadDays = async (days: LeadDays) => {
     setLeadDays(days);
     await saveNotifSettings({ notify_lead_days: days });
     await rescheduleAllCouponNotifications();
   };
 
-  /**
-   * ✅ 알림 테스트
-   */
   const handleTestNotif = async () => {
     try {
       const perm = await Notifications.getPermissionsAsync();
@@ -270,13 +250,10 @@ export default function SettingsScreen({ navigation }: any) {
     }
   };
 
-  // ✅ 로그아웃: "로컬 스케줄" 먼저 정리하고 signOut
   const handleLogout = async () => {
     setLogoutLoading(true);
     try {
-      // ✅ 핵심: 디바이스에 남아있는 예약 알림을 싹 제거
       await cancelAllLocalCouponNotifications();
-
       const { error } = await supabase.auth.signOut();
       if (error) Alert.alert('로그아웃 실패', error.message);
     } finally {
@@ -357,7 +334,6 @@ export default function SettingsScreen({ navigation }: any) {
 
       Alert.alert('탈퇴 완료', '계정이 삭제되었어요. 이용해줘서 고마워요.');
 
-      // ✅ 혹시 탈퇴 후에도 남는 로컬 알림 제거
       await cancelAllLocalCouponNotifications();
 
       await supabase.auth.signOut();
@@ -374,7 +350,6 @@ export default function SettingsScreen({ navigation }: any) {
 
   const reasonLabel = useMemo(() => REASONS.find((r) => r.key === reason)?.label ?? '', [reason]);
 
-  // ✅ iOS에서 탭바+홈인디케이터에 가려지지 않도록
   const contentBottomPadding = 24 + insets.bottom + 72;
 
   return (
@@ -385,38 +360,44 @@ export default function SettingsScreen({ navigation }: any) {
       >
         {/* 헤더 */}
         <View style={{ marginTop: 10, marginBottom: 18 }}>
-          <Text style={{ fontSize: 22, fontFamily: 'PretendardBold', color: colors.text }}>
+          <DotoText style={{ fontSize: 22, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
             설정 ⚙️
-          </Text>
-          <Text style={{ color: colors.subtext, marginTop: 4 }}>
+          </DotoText>
+          <DotoText style={{ color: colors.subtext, marginTop: 4 }} numberOfLines={2} ellipsizeMode="tail">
             도토리를 더 편하게 챙길 수 있도록, 환경을 조금 손봐볼까요.
-          </Text>
+          </DotoText>
         </View>
 
         {/* 계정 */}
         <SectionCard style={{ marginBottom: 12 }}>
-          <Text
+          <DotoText
             style={{
               fontSize: 16,
               fontFamily: 'PretendardBold',
               color: colors.text,
               marginBottom: 8,
             }}
+            numberOfLines={1}
           >
             계정 👤
-          </Text>
+          </DotoText>
 
-          <Text style={{ fontSize: 13, color: colors.subtext }}>로그인 이메일</Text>
-          <Text
+          <DotoText style={{ fontSize: 13, color: colors.subtext }} numberOfLines={1}>
+            로그인 이메일
+          </DotoText>
+
+          <DotoText
             style={{
               marginTop: 4,
               fontSize: 14,
               color: colors.text,
               fontFamily: 'PretendardBold',
             }}
+            numberOfLines={1}
+            ellipsizeMode="middle"
           >
             {email ?? '알 수 없음'}
-          </Text>
+          </DotoText>
 
           <View style={{ marginTop: 14 }}>
             <DotoButton
@@ -430,26 +411,36 @@ export default function SettingsScreen({ navigation }: any) {
 
         {/* 알림 */}
         <SectionCard style={{ marginBottom: 12 }}>
-          <Text
+          <DotoText
             style={{
               fontSize: 16,
               fontFamily: 'PretendardBold',
               color: colors.text,
               marginBottom: 12,
             }}
+            numberOfLines={1}
           >
             알림 🔔
-          </Text>
+          </DotoText>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* ✅ 스위치 행: 텍스트가 커져도 스위치가 밀리지 않게 minHeight + alignItems:'center' + right 고정 */}
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              minHeight: 56,
+            }}
+          >
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }}>
+              <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
                 만료 알림 받기
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.subtext, marginTop: 4 }}>
-                도토리가 사라지기 전에{' '}
-                <Text style={{ fontFamily: 'PretendardBold' }}>{leadLabel}</Text>에 알려줄게요.
-              </Text>
+              </DotoText>
+
+              {/* ✅ 안내 문구: 2줄 제한으로 레이아웃 폭주 방지 */}
+              <DotoText style={{ fontSize: 12, color: colors.subtext, marginTop: 4 }} numberOfLines={2} ellipsizeMode="tail">
+                도토리가 사라지기 전에 <DotoText style={{ fontFamily: 'PretendardBold' }}>{leadLabel}</DotoText>에 알려줄게요.
+              </DotoText>
             </View>
 
             <Switch
@@ -462,7 +453,9 @@ export default function SettingsScreen({ navigation }: any) {
 
           {/* 리드타임 */}
           <View style={{ marginTop: 14 }}>
-            <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}>알림 시점 선택</Text>
+            <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }} numberOfLines={1}>
+              알림 시점 선택
+            </DotoText>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               {LEAD_OPTIONS.map((opt) => {
@@ -483,9 +476,13 @@ export default function SettingsScreen({ navigation }: any) {
                       marginRight: 8,
                       marginBottom: 8,
                       opacity: !notifEnabled ? 0.45 : 1,
+                      minHeight: 36, // ✅ 칩 높이 고정(폰트 스케일에도 안정)
+                      justifyContent: 'center',
                     }}
                   >
-                    <Text
+                    <DotoText
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
                       style={{
                         fontSize: 12,
                         color: active ? colors.primary : colors.text,
@@ -493,15 +490,15 @@ export default function SettingsScreen({ navigation }: any) {
                       }}
                     >
                       {opt.label}
-                    </Text>
+                    </DotoText>
                   </Pressable>
                 );
               })}
             </View>
 
-            <Text style={{ fontSize: 12, color: colors.subtext, marginTop: 2 }}>
+            <DotoText style={{ fontSize: 12, color: colors.subtext, marginTop: 2 }} numberOfLines={1}>
               * 알림은 오전 9시 기준으로 보내요.
-            </Text>
+            </DotoText>
           </View>
 
           <View style={{ marginTop: 14 }}>
@@ -516,14 +513,14 @@ export default function SettingsScreen({ navigation }: any) {
 
         {/* 기타 */}
         <SectionCard>
-          <Text style={{ fontSize: 16, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 8 }}>
+          <DotoText style={{ fontSize: 16, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 8 }} numberOfLines={1}>
             기타 🌿
-          </Text>
+          </DotoText>
 
-          <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 12 }}>
+          <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 12 }} numberOfLines={3} ellipsizeMode="tail">
             도토링은 지금 작은 실험 단계예요. 사용해보면서 느낀 점이 있다면,
             문의하기를 통해 알려주세요.
-          </Text>
+          </DotoText>
 
           <DotoButton
             title="개인정보 처리방침 보기"
@@ -543,13 +540,13 @@ export default function SettingsScreen({ navigation }: any) {
             onPress={openDeleteFlow}
             style={{ backgroundColor: '#2D2D2D' }}
           />
-          <Text style={{ marginTop: 10, fontSize: 12, color: colors.subtext }}>
+          <DotoText style={{ marginTop: 10, fontSize: 12, color: colors.subtext }} numberOfLines={2} ellipsizeMode="tail">
             * 삭제하면 쿠폰 데이터/이미지가 모두 삭제되고 복구할 수 없어요.
-          </Text>
+          </DotoText>
         </SectionCard>
       </ScrollView>
 
-      {/* 계정삭제 모달 (너 코드 그대로 유지) */}
+      {/* 계정삭제 모달 */}
       <Modal visible={deleteOpen} transparent animationType="fade" onRequestClose={closeDeleteFlow}>
         <View
           style={{
@@ -570,12 +567,14 @@ export default function SettingsScreen({ navigation }: any) {
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: 16, fontFamily: 'PretendardBold', color: colors.text }}>
+              <DotoText style={{ fontSize: 16, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
                 계정 삭제
-              </Text>
+              </DotoText>
 
               <Pressable onPress={closeDeleteFlow} disabled={deleteStep === 3}>
-                <Text style={{ color: colors.subtext, fontSize: 13 }}>닫기</Text>
+                <DotoText style={{ color: colors.subtext, fontSize: 13 }} numberOfLines={1}>
+                  닫기
+                </DotoText>
               </Pressable>
             </View>
 
@@ -583,9 +582,9 @@ export default function SettingsScreen({ navigation }: any) {
 
             {deleteStep === 1 && (
               <>
-                <Text style={{ color: colors.subtext, fontSize: 12, marginBottom: 10 }}>
+                <DotoText style={{ color: colors.subtext, fontSize: 12, marginBottom: 10 }} numberOfLines={3} ellipsizeMode="tail">
                   삭제하면 쿠폰/이미지 포함 모든 데이터가 삭제되고 복구할 수 없어요.
-                </Text>
+                </DotoText>
 
                 <View
                   style={{
@@ -596,29 +595,29 @@ export default function SettingsScreen({ navigation }: any) {
                     borderColor: '#E0D9CF',
                   }}
                 >
-                  <Text style={{ fontFamily: 'PretendardBold', color: colors.text, marginBottom: 6 }}>
+                  <DotoText style={{ fontFamily: 'PretendardBold', color: colors.text, marginBottom: 6 }} numberOfLines={1}>
                     삭제 요약
-                  </Text>
+                  </DotoText>
 
                   {summaryLoading ? (
                     <View style={{ paddingVertical: 8 }}>
                       <ActivityIndicator size="small" color={colors.primary} />
                     </View>
                   ) : (
-                    <Text style={{ color: colors.subtext, fontSize: 12 }}>
+                    <DotoText style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={3} ellipsizeMode="tail">
                       쿠폰 {couponCount}개 · 이미지 {imageCount}개
                       {imageCount === 0 ? '\n(이미지 폴더 구조에 따라 0으로 보일 수 있어요)' : ''}
-                    </Text>
+                    </DotoText>
                   )}
                 </View>
 
                 <View style={{ height: 12 }} />
 
-                <Text style={{ fontFamily: 'PretendardBold', color: colors.text, marginBottom: 8 }}>
+                <DotoText style={{ fontFamily: 'PretendardBold', color: colors.text, marginBottom: 8 }} numberOfLines={1}>
                   탈퇴 이유 (선택)
-                </Text>
+                </DotoText>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 as any }}>
                   {REASONS.map((r) => {
                     const active = r.key === reason;
                     return (
@@ -632,17 +631,21 @@ export default function SettingsScreen({ navigation }: any) {
                           borderWidth: 1,
                           borderColor: active ? colors.primary : '#E0D9CF',
                           backgroundColor: active ? '#F3E9DE' : '#fff',
+                          minHeight: 36, // ✅ 칩 높이 고정
+                          justifyContent: 'center',
                         }}
                       >
-                        <Text
+                        <DotoText
                           style={{
                             fontSize: 12,
                             color: active ? colors.primary : colors.text,
                             fontFamily: active ? 'PretendardBold' : 'Pretendard',
                           }}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
                         >
                           {r.label}
-                        </Text>
+                        </DotoText>
                       </Pressable>
                     );
                   })}
@@ -650,10 +653,10 @@ export default function SettingsScreen({ navigation }: any) {
 
                 {reason === 'other' && (
                   <View style={{ marginTop: 10 }}>
-                    <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }}>
+                    <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }} numberOfLines={1}>
                       기타 사유 (선택)
-                    </Text>
-                    <TextInput
+                    </DotoText>
+                    <DotoTextInput
                       value={reasonText}
                       onChangeText={setReasonText}
                       placeholder="짧게 적어줘도 좋아요."
@@ -666,7 +669,9 @@ export default function SettingsScreen({ navigation }: any) {
                         paddingVertical: Platform.OS === 'android' ? 10 : 12,
                         fontFamily: 'Pretendard',
                         color: colors.text,
+                        minHeight: 44,
                       }}
+                      returnKeyType="done"
                     />
                   </View>
                 )}
@@ -683,19 +688,23 @@ export default function SettingsScreen({ navigation }: any) {
 
             {deleteStep === 2 && (
               <>
-                <Text style={{ color: colors.subtext, fontSize: 12, marginBottom: 12 }}>
+                <DotoText style={{ color: colors.subtext, fontSize: 12, marginBottom: 12 }} numberOfLines={2} ellipsizeMode="tail">
                   안전을 위해 비밀번호를 다시 확인할게요.
-                </Text>
+                </DotoText>
 
                 <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }}>이메일</Text>
-                  <Text style={{ fontFamily: 'PretendardBold', color: colors.text }}>
+                  <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }} numberOfLines={1}>
+                    이메일
+                  </DotoText>
+                  <DotoText style={{ fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1} ellipsizeMode="middle">
                     {email ?? '-'}
-                  </Text>
+                  </DotoText>
                 </View>
 
-                <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }}>비밀번호</Text>
-                <TextInput
+                <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }} numberOfLines={1}>
+                  비밀번호
+                </DotoText>
+                <DotoTextInput
                   value={password}
                   onChangeText={setPassword}
                   placeholder="비밀번호 입력"
@@ -709,12 +718,14 @@ export default function SettingsScreen({ navigation }: any) {
                     paddingVertical: Platform.OS === 'android' ? 10 : 12,
                     fontFamily: 'Pretendard',
                     color: colors.text,
+                    minHeight: 44,
                   }}
+                  returnKeyType="done"
                 />
 
                 <View style={{ height: 14 }} />
 
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 10 as any }}>
                   <View style={{ flex: 1 }}>
                     <DotoButton
                       title="이전"
@@ -732,17 +743,17 @@ export default function SettingsScreen({ navigation }: any) {
                   </View>
                 </View>
 
-                <Text style={{ marginTop: 10, fontSize: 12, color: colors.subtext }}>
+                <DotoText style={{ marginTop: 10, fontSize: 12, color: colors.subtext }} numberOfLines={1} ellipsizeMode="tail">
                   선택한 이유: {reasonLabel}
-                </Text>
+                </DotoText>
               </>
             )}
 
             {deleteStep === 3 && (
               <>
-                <Text style={{ color: colors.subtext, fontSize: 12, marginBottom: 12 }}>
+                <DotoText style={{ color: colors.subtext, fontSize: 12, marginBottom: 12 }} numberOfLines={2}>
                   삭제 요청을 처리 중이에요… 잠시만요.
-                </Text>
+                </DotoText>
                 <View style={{ paddingVertical: 12 }}>
                   <ActivityIndicator size="small" color={colors.primary} />
                 </View>

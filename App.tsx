@@ -1,6 +1,6 @@
 // App.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Text, TextInput } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -18,6 +18,13 @@ import { linking } from './src/navigation/linking';
 import { cancelAllLocalCouponNotifications } from './src/utils/couponNotifications';
 
 export const navigationRef = createNavigationContainerRef<any>();
+
+// ✅ 전역 폰트 스케일링 차단 (글자 커져서 깨짐 방지)
+(Text as any).defaultProps = (Text as any).defaultProps || {};
+(Text as any).defaultProps.allowFontScaling = false;
+
+(TextInput as any).defaultProps = (TextInput as any).defaultProps || {};
+(TextInput as any).defaultProps.allowFontScaling = false;
 
 type RootStackParamList = {
   AuthStack: { screen?: string; params?: any } | undefined;

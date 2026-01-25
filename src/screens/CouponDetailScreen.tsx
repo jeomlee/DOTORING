@@ -1,6 +1,6 @@
 // src/screens/CouponDetailScreen.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, Alert, ScrollView, Image, TouchableOpacity, Share } from 'react-native';
+import { View, Alert, ScrollView, Image, TouchableOpacity, Share } from 'react-native';
 import dayjs from 'dayjs';
 import ImageViewing from 'react-native-image-viewing';
 import * as Sharing from 'expo-sharing';
@@ -13,6 +13,7 @@ import { colors } from '../theme';
 import ScreenContainer from '../components/ScreenContainer';
 import SectionCard from '../components/SectionCard';
 import DotoButton from '../components/DotoButton';
+import DotoText from '../components/DotoText';
 import { resolveCouponImageUrl } from '../utils/imageUrls';
 
 // ✅ 알림 유틸 (leadDays/user_settings 반영)
@@ -81,19 +82,21 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     return (
       <ScreenContainer>
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Text
+          <DotoText
             style={{
               fontSize: 16,
               fontFamily: 'PretendardBold',
               color: colors.text,
               marginBottom: 8,
             }}
+            numberOfLines={2}
+            ellipsizeMode="tail"
           >
             쿠폰 정보를 불러올 수 없어요.
-          </Text>
-          <Text style={{ color: colors.subtext, marginBottom: 14 }}>
+          </DotoText>
+          <DotoText style={{ color: colors.subtext, marginBottom: 14, lineHeight: 20 }}>
             상세 화면으로 이동할 때 쿠폰 ID가 전달되지 않았어요. 홈으로 돌아가서 다시 열어주세요.
-          </Text>
+          </DotoText>
           <DotoButton title="뒤로가기" onPress={() => navigation.goBack()} />
         </View>
       </ScreenContainer>
@@ -104,7 +107,9 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     return (
       <ScreenContainer>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: colors.subtext }}>불러오는 중...</Text>
+          <DotoText style={{ color: colors.subtext }} numberOfLines={1}>
+            불러오는 중...
+          </DotoText>
         </View>
       </ScreenContainer>
     );
@@ -115,8 +120,7 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
   const diff = expire.startOf('day').diff(today, 'day');
   const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-DAY' : '만료됨';
 
-  const statusColor =
-    coupon.status === 'used' ? colors.accent : diff < 0 ? '#C65B5B' : colors.primary;
+  const statusColor = coupon.status === 'used' ? colors.accent : diff < 0 ? '#C65B5B' : colors.primary;
 
   const displayImageUri = coupon.resolvedImageUrl ?? coupon.image_url ?? null;
 
@@ -151,7 +155,6 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  // ✅ 삭제: DB + Storage + 로컬 알림까지 삭제
   const handleDelete = async () => {
     Alert.alert('정말 삭제할까요?', '이 도토리는 되돌릴 수 없어요.', [
       { text: '취소', style: 'cancel' },
@@ -246,12 +249,12 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
     <ScreenContainer>
       <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}>
         <View style={{ marginBottom: 16 }}>
-          <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>
+          <DotoText style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={2} ellipsizeMode="tail">
             도토리 상세 보기 🔍
-          </Text>
-          <Text style={{ color: colors.subtext, marginTop: 4 }}>
+          </DotoText>
+          <DotoText style={{ color: colors.subtext, marginTop: 4 }} numberOfLines={2} ellipsizeMode="tail">
             이미지를 중심으로, 잊지 말고 챙겨가요.
-          </Text>
+          </DotoText>
         </View>
 
         <SectionCard>
@@ -295,51 +298,66 @@ export default function CouponDetailScreen({ route, navigation }: Props) {
                 marginBottom: 8,
               }}
             >
-              <Text style={{ fontSize: 11, fontFamily: 'PretendardBold', color: colors.text }}>
+              <DotoText style={{ fontSize: 11, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1} ellipsizeMode="tail">
                 {coupon.category}
-              </Text>
+              </DotoText>
             </View>
           ) : null}
 
-          <Text style={{ fontSize: 18, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 6 }}>
+          <DotoText
+            style={{ fontSize: 18, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 6 }}
+            numberOfLines={3}
+            ellipsizeMode="tail"
+          >
             {coupon.title}
-          </Text>
+          </DotoText>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-            <View>
-              <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 2 }}>만료일</Text>
-              <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }}>
+          {/* ✅ 2열 정보: 폰트/길이 때문에 밀리지 않게 flex 안정화 */}
+          <View style={{ flexDirection: 'row', marginTop: 6 }}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 2 }} numberOfLines={1}>
+                만료일
+              </DotoText>
+              <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1} ellipsizeMode="tail">
                 {expire.format('YYYY년 MM월 DD일')}
-              </Text>
+              </DotoText>
             </View>
 
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 3 }}>남은 기간</Text>
-              <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: statusColor }}>
+            <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+              <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 3 }} numberOfLines={1}>
+                남은 기간
+              </DotoText>
+              <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: statusColor }} numberOfLines={1}>
                 {dday}
-              </Text>
+              </DotoText>
             </View>
           </View>
 
           <View style={{ marginTop: 12 }}>
-            <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 4 }}>상태</Text>
-            <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: statusColor }}>
+            <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 4 }} numberOfLines={1}>
+              상태
+            </DotoText>
+            <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: statusColor }} numberOfLines={1} ellipsizeMode="tail">
               {coupon.status === 'used' ? '사용 완료 ✅' : diff < 0 ? '만료됨 ❌' : '사용 가능 ✨'}
-            </Text>
+            </DotoText>
           </View>
 
           {coupon.memo ? (
             <View style={{ marginTop: 14 }}>
-              <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 4 }}>메모</Text>
-              <Text style={{ fontSize: 14, color: colors.text }}>{coupon.memo}</Text>
+              <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 4 }} numberOfLines={1}>
+                메모
+              </DotoText>
+              <DotoText style={{ fontSize: 14, color: colors.text, lineHeight: 22 }}>
+                {coupon.memo}
+              </DotoText>
             </View>
           ) : null}
         </SectionCard>
 
         <SectionCard>
-          <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 8 }}>
+          <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 8 }} numberOfLines={1}>
             행동하기 🪵
-          </Text>
+          </DotoText>
 
           <DotoButton
             title={sharing ? '공유 준비 중...' : '📤 공유하기 (이미지)'}

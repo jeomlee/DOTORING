@@ -2,12 +2,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
   Alert,
   RefreshControl,
   TouchableOpacity,
   Animated,
-  ScrollView,
 } from 'react-native';
 import dayjs from 'dayjs';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +14,7 @@ import { supabase } from '../api/supabaseClient';
 import { colors } from '../theme';
 import ScreenContainer from '../components/ScreenContainer';
 import DotoIcon from '../components/DotoIcon';
+import DotoText from '../components/DotoText';
 
 type Coupon = {
   id: string;
@@ -40,7 +39,7 @@ export default function ForestScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [range, setRange] = useState<Chip>('week'); // ✅ 숲을 보는 범위
+  const [range, setRange] = useState<Chip>('week');
   const fade = useRef(new Animated.Value(0)).current;
 
   const today = useMemo(() => dayjs().startOf('day'), []);
@@ -90,7 +89,6 @@ export default function ForestScreen({ navigation }: Props) {
     setRefreshing(false);
   };
 
-  // ✅ 분류
   const derived = useMemo(() => {
     const list = coupons;
 
@@ -106,10 +104,9 @@ export default function ForestScreen({ navigation }: Props) {
     const expired = list.filter(isExpired);
     const active = list.filter(isActive);
 
-    // 기간 필터
     const from = (() => {
-      if (range === 'week') return today.subtract(6, 'day'); // 최근 7일
-      if (range === 'month') return today.subtract(29, 'day'); // 최근 30일
+      if (range === 'week') return today.subtract(6, 'day');
+      if (range === 'month') return today.subtract(29, 'day');
       return null;
     })();
 
@@ -119,7 +116,7 @@ export default function ForestScreen({ navigation }: Props) {
       return dt.isAfter(from.subtract(1, 'day')) && dt.isBefore(today.add(1, 'day'));
     };
 
-    // used는 사용일이 DB에 없어서, 일단 “만료일 기준”으로 표시(너희 DB 구조상 가장 안전)
+    // used는 사용일이 DB에 없어서 만료일 기준
     const usedR = used.filter((c) => inRange(c.expire_date));
     const expiredR = expired.filter((c) => inRange(c.expire_date));
 
@@ -135,9 +132,7 @@ export default function ForestScreen({ navigation }: Props) {
     };
   }, [coupons, today, range]);
 
-  // ✅ “숲 지도”에 뿌릴 토큰들 (이모지로 가볍게)
   const forestTokens = useMemo(() => {
-    // 최근 범위에서만 “숲/한입”을 보여주면 재밌음
     const trees = derived.expiredR.map((c) => ({
       id: c.id,
       type: 'tree' as const,
@@ -151,17 +146,13 @@ export default function ForestScreen({ navigation }: Props) {
       date: c.expire_date,
     }));
 
-    // 너무 많으면 화면이 지저분해지니까 상한
     const MAX = range === 'week' ? 18 : range === 'month' ? 36 : 60;
 
-    const merged = [...trees, ...eats]
+    return [...trees, ...eats]
       .sort((a, b) => dayjs(b.date).diff(dayjs(a.date), 'day'))
       .slice(0, MAX);
-
-    return merged;
   }, [derived.expiredR, derived.usedR, range]);
 
-  // ✅ 숲의 “기분” 문장
   const vibeText = useMemo(() => {
     const wTrees = derived.expiredR.length;
     const wEats = derived.usedR.length;
@@ -190,9 +181,13 @@ export default function ForestScreen({ navigation }: Props) {
           marginRight: 8,
           borderWidth: active ? 1 : 0,
           borderColor: '#E5E0D8',
+          minHeight: 34, // ✅ 폰트 스케일에도 칩 높이 안정
+          justifyContent: 'center',
         }}
       >
-        <Text
+        <DotoText
+          numberOfLines={1}
+          ellipsizeMode="tail"
           style={{
             fontSize: 12,
             fontFamily: 'PretendardBold',
@@ -200,7 +195,7 @@ export default function ForestScreen({ navigation }: Props) {
           }}
         >
           {label}
-        </Text>
+        </DotoText>
       </TouchableOpacity>
     );
   };
@@ -231,33 +226,41 @@ export default function ForestScreen({ navigation }: Props) {
         shadowOffset: { width: 0, height: 3 },
         shadowRadius: 8,
         elevation: 2,
+        minHeight: 118, // ✅ 카드 높이 출렁임 방지(폰트 스케일)
+        justifyContent: 'space-between',
       }}
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 12, color: colors.subtext }}>{title}</Text>
+        <DotoText style={{ fontSize: 12, color: colors.subtext }} numberOfLines={1} ellipsizeMode="tail">
+          {title}
+        </DotoText>
         <Ionicons name={icon} size={16} color={colors.subtext} />
       </View>
 
-      <Text
+      <DotoText
         style={{
           marginTop: 10,
           fontSize: 22,
           fontFamily: 'PretendardBold',
           color: colors.text,
         }}
+        numberOfLines={1}
       >
         {value}
-      </Text>
+      </DotoText>
 
-      <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext }} numberOfLines={2}>
+      <DotoText
+        style={{ marginTop: 6, fontSize: 12, color: colors.subtext }}
+        numberOfLines={2}
+        ellipsizeMode="tail"
+      >
         {hint}
-      </Text>
+      </DotoText>
     </TouchableOpacity>
   );
 
-  // ✅ 숲 지도(그리드)
   const ForestMap = () => {
-    const size = range === 'week' ? 6 : range === 'month' ? 8 : 10; // 열 개수 느낌만
+    const size = range === 'week' ? 6 : range === 'month' ? 8 : 10;
     const cell = clamp(Math.floor(320 / size), 26, 42);
 
     if (!forestTokens.length) {
@@ -270,12 +273,12 @@ export default function ForestScreen({ navigation }: Props) {
             marginTop: 12,
           }}
         >
-          <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }}>
+          <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
             아직 숲에 기록이 없어요.
-          </Text>
-          <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext }}>
+          </DotoText>
+          <DotoText style={{ marginTop: 6, fontSize: 12, color: colors.subtext }} numberOfLines={2} ellipsizeMode="tail">
             도토리를 쓰면 “냠냠”, 놓치면 “나무”로 남아요.
-          </Text>
+          </DotoText>
         </View>
       );
     }
@@ -294,14 +297,19 @@ export default function ForestScreen({ navigation }: Props) {
           elevation: 1,
         }}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-          <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, alignItems: 'center' }}>
+          <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
             도토리 숲 지도
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, color: colors.subtext }}>🌳 {derived.expiredR.length} · 😋</Text>
+          </DotoText>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
+            <DotoText style={{ fontSize: 12, color: colors.subtext }} numberOfLines={1}>
+              🌳 {derived.expiredR.length} · 😋
+            </DotoText>
             <DotoIcon size={14} style={{ marginHorizontal: 4 }} />
-            <Text style={{ fontSize: 12, color: colors.subtext }}>{derived.usedR.length}</Text>
+            <DotoText style={{ fontSize: 12, color: colors.subtext }} numberOfLines={1}>
+              {derived.usedR.length}
+            </DotoText>
           </View>
         </View>
 
@@ -322,7 +330,9 @@ export default function ForestScreen({ navigation }: Props) {
               }}
             >
               {t.type === 'tree' ? (
-                <Text style={{ fontSize: 16 }}>🌳</Text>
+                <DotoText style={{ fontSize: 16 }} numberOfLines={1}>
+                  🌳
+                </DotoText>
               ) : (
                 <DotoIcon size={18} />
               )}
@@ -330,9 +340,9 @@ export default function ForestScreen({ navigation }: Props) {
           ))}
         </View>
 
-        <Text style={{ marginTop: 10, fontSize: 12, color: colors.subtext }}>
+        <DotoText style={{ marginTop: 10, fontSize: 12, color: colors.subtext }} numberOfLines={1}>
           터치하면 해당 도토리로 이동해요.
-        </Text>
+        </DotoText>
       </View>
     );
   };
@@ -347,12 +357,12 @@ export default function ForestScreen({ navigation }: Props) {
       >
         {/* 헤더 */}
         <View style={{ marginBottom: 10 }}>
-          <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>
+          <DotoText style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
             도토리 숲 🌲
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 12, color: colors.subtext }}>
+          </DotoText>
+          <DotoText style={{ marginTop: 4, fontSize: 12, color: colors.subtext }} numberOfLines={2} ellipsizeMode="tail">
             잃어버린 도토리는 숲이 되고, 챙긴 도토리는 냠냠했어요.
-          </Text>
+          </DotoText>
         </View>
 
         {/* 기간 칩 */}
@@ -370,9 +380,13 @@ export default function ForestScreen({ navigation }: Props) {
             paddingHorizontal: 12,
             paddingVertical: 10,
             marginTop: 6,
+            minHeight: 44, // ✅ 박스 높이 흔들림 방지
+            justifyContent: 'center',
           }}
         >
-          <Text style={{ fontSize: 13, color: colors.text }}>{vibeText}</Text>
+          <DotoText style={{ fontSize: 13, color: colors.text }} numberOfLines={2} ellipsizeMode="tail">
+            {vibeText}
+          </DotoText>
         </View>
 
         {/* 스탯 카드 */}
@@ -419,12 +433,12 @@ export default function ForestScreen({ navigation }: Props) {
             elevation: 1,
           }}
         >
-          <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }}>
+          <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
             숲을 줄이는 가장 쉬운 방법
-          </Text>
-          <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext }}>
+          </DotoText>
+          <DotoText style={{ marginTop: 6, fontSize: 12, color: colors.subtext }} numberOfLines={2} ellipsizeMode="tail">
             오늘 화면 확인만 해도, 숲이 되는 걸 막을 수 있어요.
-          </Text>
+          </DotoText>
 
           <TouchableOpacity
             onPress={() => navigation.navigate('Today')}
@@ -435,11 +449,13 @@ export default function ForestScreen({ navigation }: Props) {
               borderRadius: 999,
               paddingVertical: 10,
               alignItems: 'center',
+              minHeight: 40, // ✅ 버튼 높이 고정
+              justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 13, fontFamily: 'PretendardBold', color: colors.text }}>
+            <DotoText style={{ fontSize: 13, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
               오늘 화면으로 가기
-            </Text>
+            </DotoText>
           </TouchableOpacity>
         </View>
       </Animated.ScrollView>

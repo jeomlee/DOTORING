@@ -34,7 +34,6 @@ function parseParamsFromUrl(url: string): Record<string, string> {
     consume(queryPart);
     consume(hashPart);
 
-    // expo-linking parse 보강
     const parsed = Linking.parse(url);
     const qp = (parsed.queryParams ?? {}) as Record<string, any>;
     Object.keys(qp).forEach((k) => {
@@ -83,7 +82,6 @@ export default function ResetPasswordScreen({
 
   const exitToAuthLanding = () => {
     onExitRecovery?.();
-    // RootStack 구조이므로 AuthStack으로 리셋
     navigation.reset({
       index: 0,
       routes: [{ name: 'AuthStack', params: { screen: 'AuthLanding' } }],
@@ -100,7 +98,6 @@ export default function ResetPasswordScreen({
     const hasCode = !!p.code;
     const hasTokens = !!(p.access_token && p.refresh_token);
 
-    // ✅ 1) PKCE code flow
     if (hasCode) {
       console.log('[ResetPassword] exchangeCodeForSession...');
       const { error } = await supabase.auth.exchangeCodeForSession(p.code);
@@ -108,7 +105,6 @@ export default function ResetPasswordScreen({
       return true;
     }
 
-    // ✅ 2) Implicit token flow
     if (hasTokens) {
       console.log('[ResetPassword] setSession via tokens...');
       const { error } = await supabase.auth.setSession({
@@ -119,7 +115,6 @@ export default function ResetPasswordScreen({
       return true;
     }
 
-    // ✅ 3) 혹시 이미 세션이 있으면 OK
     const { data } = await supabase.auth.getSession();
     if (data.session) {
       console.log('[ResetPassword] session already exists');
@@ -146,7 +141,6 @@ export default function ResetPasswordScreen({
       try {
         setChecking(true);
 
-        // ✅ 1) route.params 우선 (App.tsx에서 { url } 넘긴 경우)
         if (!handledOnceRef.current && Object.keys(routeParams).length > 0) {
           handledOnceRef.current = true;
 
@@ -166,7 +160,6 @@ export default function ResetPasswordScreen({
           return;
         }
 
-        // ✅ 2) initial URL
         if (!handledOnceRef.current) {
           const initialUrl = await Linking.getInitialURL();
           console.log('[ResetPassword] initialUrl:', initialUrl);
@@ -184,7 +177,6 @@ export default function ResetPasswordScreen({
           }
         }
 
-        // ✅ 3) fallback: 세션 확인
         const { data } = await supabase.auth.getSession();
         if (!cancelled) {
           setReady(!!data.session);
@@ -199,7 +191,6 @@ export default function ResetPasswordScreen({
         }
       }
 
-      // ✅ 4) url 이벤트 (앱이 떠있는 상태에서 링크 재클릭)
       sub = Linking.addEventListener('url', (event) => {
         if (completed) return;
 
@@ -247,7 +238,6 @@ export default function ResetPasswordScreen({
 
       setCompleted(true);
 
-      // ✅ 비번 변경 후 로그아웃 (안전)
       await supabase.auth.signOut();
 
       Alert.alert('변경 완료', '이제 새 비밀번호로 로그인할 수 있어요.', [
@@ -263,20 +253,36 @@ export default function ResetPasswordScreen({
   return (
     <ScreenContainer>
       <View style={{ marginTop: 24, marginBottom: 12 }}>
-        <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>비밀번호 재설정</Text>
-        <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext, lineHeight: 18 }}>
+        <Text
+          allowFontScaling={false}
+          style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}
+        >
+          비밀번호 재설정
+        </Text>
+
+        <Text
+          allowFontScaling={false}
+          style={{ marginTop: 6, fontSize: 12, color: colors.subtext, lineHeight: 18 }}
+        >
           새 비밀번호를 입력해주세요.
         </Text>
       </View>
 
       <SectionCard>
         {checking ? (
-          <Text style={{ fontSize: 12, color: colors.subtext }}>링크 확인 중...</Text>
+          <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.subtext }}>
+            링크 확인 중...
+          </Text>
         ) : completed ? (
-          <Text style={{ fontSize: 12, color: colors.subtext }}>변경 완료! 로그인 화면으로 이동할게요…</Text>
+          <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.subtext }}>
+            변경 완료! 로그인 화면으로 이동할게요…
+          </Text>
         ) : !ready ? (
           <>
-            <Text style={{ fontSize: 12, color: colors.subtext, lineHeight: 18 }}>
+            <Text
+              allowFontScaling={false}
+              style={{ fontSize: 12, color: colors.subtext, lineHeight: 18 }}
+            >
               복구 정보를 찾지 못했어요. 메일의 링크를 다시 눌러주세요.
             </Text>
             <View style={{ height: 12 }} />
@@ -284,7 +290,13 @@ export default function ResetPasswordScreen({
           </>
         ) : (
           <>
-            <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}>새 비밀번호</Text>
+            <Text
+              allowFontScaling={false}
+              style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}
+            >
+              새 비밀번호
+            </Text>
+
             <TextInput
               value={pw1}
               onChangeText={setPw1}
@@ -305,7 +317,13 @@ export default function ResetPasswordScreen({
 
             <View style={{ height: 12 }} />
 
-            <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}>새 비밀번호 확인</Text>
+            <Text
+              allowFontScaling={false}
+              style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}
+            >
+              새 비밀번호 확인
+            </Text>
+
             <TextInput
               value={pw2}
               onChangeText={setPw2}

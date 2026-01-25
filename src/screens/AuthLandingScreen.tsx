@@ -1,9 +1,9 @@
 // src/screens/AuthLandingScreen.tsx
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, Alert, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Linking from 'expo-linking';
+
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 
 import { supabase } from '../api/supabaseClient';
 import { colors } from '../theme';
@@ -11,48 +11,8 @@ import ScreenContainer from '../components/ScreenContainer';
 import SectionCard from '../components/SectionCard';
 import DotoButton from '../components/DotoButton';
 
-WebBrowser.maybeCompleteAuthSession();
-
-// ✅ dev client/production 환경에 맞게 자동
-const OAUTH_REDIRECT_TO = Linking.createURL('auth/callback');
-
 const dotoringLogo = require('../assets/DOTORING.png');
 const googleIcon = require('../assets/google-g.png');
-
-/**
- * ✅ query(?a=b) + hash(#a=b) 모두 파싱
- * - PKCE: ?code=...
- * - Implicit: #access_token=...&refresh_token=...
- */
-function parseParamsFromUrl(url: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  try {
-    const qIndex = url.indexOf('?');
-    const hIndex = url.indexOf('#');
-
-    const queryPart =
-      qIndex >= 0 ? url.slice(qIndex + 1, hIndex >= 0 ? hIndex : undefined) : '';
-    const hashPart = hIndex >= 0 ? url.slice(hIndex + 1) : '';
-
-    const consume = (s: string) => {
-      if (!s) return;
-      for (const p of s.split('&')) {
-        if (!p) continue;
-        const [k, v] = p.split('=');
-        if (!k) continue;
-        const key = decodeURIComponent(k);
-        const val = v ? decodeURIComponent(v) : '';
-        out[key] = val;
-      }
-    };
-
-    consume(queryPart);
-    consume(hashPart);
-  } catch {
-    // ignore
-  }
-  return out;
-}
 
 export default function AuthLandingScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
@@ -62,7 +22,34 @@ export default function AuthLandingScreen({ navigation }: any) {
   const lockRef = useRef(false);
 
   const [appleAvailable, setAppleAvailable] = useState<boolean>(Platform.OS === 'ios');
-  React.useEffect(() => {
+
+  // ✅ Google 네이티브 설정 (Android 안정형)
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    if (!webClientId) {
+      console.log('[AuthLanding] Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID');
+      // 앱 크래시 방지: 런타임에서만 경고
+      Alert.alert(
+        '설정 필요',
+        'Google 로그인 설정(Web Client ID)이 누락되었습니다.\n.env에 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID를 설정해주세요.'
+      );
+      return;
+    }
+
+    GoogleSignin.configure({
+      webClientId,
+      // ✅ 기본 스코프 (이메일/프로필)
+      scopes: ['email', 'profile'],
+      // offlineAccess는 보통 필요없음 (서버에서 refresh token까지 다룰 때만)
+      offlineAccess: false,
+      forceCodeForRefreshToken: false,
+    });
+  }, []);
+
+  // ✅ Apple 가용성 체크 (iOS)
+  useEffect(() => {
     let mounted = true;
     (async () => {
       if (Platform.OS !== 'ios') return;
@@ -90,15 +77,15 @@ export default function AuthLandingScreen({ navigation }: any) {
   );
 
   const startStatus = (providerName: string) => {
-    setStatusMsg(`${providerName}로 이동 중…\nDOTORING에서 접근합니다`);
+    setStatusMsg(`${providerName}로 진행 중…\nDOTORING에서 안전하게 로그인합니다`);
   };
   const endStatus = () => setStatusMsg(null);
 
   /**
-   * ✅ Google: Web OAuth (Browser session)
-   * - queryParams.prompt = select_account → 매번 계정 선택 화면 유도
+   * ✅ Google: 네이티브 로그인 → idToken → Supabase signInWithIdToken
+   * - 브라우저를 열지 않으므로 disallowed_useragent 원천 차단
    */
-  const handleGoogleOAuth = async () => {
+  const handleGoogleNative = async () => {
     if (lockRef.current) return;
     lockRef.current = true;
 
@@ -107,60 +94,53 @@ export default function AuthLandingScreen({ navigation }: any) {
       setLoadingProvider('google');
       startStatus('Google');
 
-      console.log('[AuthLanding] OAUTH_REDIRECT_TO =', OAUTH_REDIRECT_TO);
+      if (Platform.OS !== 'android') {
+        throw new Error('Google 네이티브 로그인은 현재 Android에서만 활성화되어 있습니다.');
+      }
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      // 1) Play Services 확인
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+      // 2) 혹시 이전 로그인 잔존하면 깨끗하게 정리
+      try {
+        await GoogleSignin.signOut();
+      } catch {
+        // ignore
+      }
+
+      // 3) 로그인
+      const userInfo = await GoogleSignin.signIn();
+
+      const idToken = userInfo?.data?.idToken ?? userInfo?.idToken;
+      if (!idToken) {
+        throw new Error('Google에서 idToken을 받지 못했습니다. (webClientId 설정을 확인하세요)');
+      }
+
+      // 4) Supabase에 idToken으로 로그인
+      const { error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
-        options: {
-          redirectTo: OAUTH_REDIRECT_TO,
-          skipBrowserRedirect: true,
-
-          // ✅ 핵심: 계정 선택 화면 강제
-          queryParams: {
-            prompt: 'select_account',
-          },
-        },
+        token: idToken,
       });
-
       if (error) throw error;
-      if (!data?.url) throw new Error('OAuth URL을 생성하지 못했어요.');
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, OAUTH_REDIRECT_TO);
-      console.log('[AuthLanding] openAuthSession result:', result.type, result.url);
-
-      if (result.type !== 'success' || !result.url) return;
-
-      const params = parseParamsFromUrl(result.url);
-
-      // ✅ 에러가 전달되는 케이스도 처리
-      if (params.error_description || params.error) {
-        throw new Error(params.error_description || params.error);
-      }
-
-      // 1) ✅ PKCE 코드 플로우: code 있으면 교환
-      if (params.code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
-        if (exchangeError) throw exchangeError;
-      }
-      // 2) ✅ Implicit 플로우: access_token/refresh_token 있으면 세션 설정
-      else if (params.access_token && params.refresh_token) {
-        const { error: setSessionError } = await supabase.auth.setSession({
-          access_token: params.access_token,
-          refresh_token: params.refresh_token,
-        });
-        if (setSessionError) throw setSessionError;
-      }
-      // 3) 둘 다 없으면 실패
-      else {
-        throw new Error('로그인 결과에서 code 또는 access_token을 찾지 못했어요.');
-      }
-
-      // ✅ 세션 확인
       const { data: sessionData } = await supabase.auth.getSession();
-      console.log('[AuthLanding] session after google login:', !!sessionData.session);
+      console.log('[AuthLanding] session after google native login:', !!sessionData.session);
     } catch (e: any) {
-      console.log('[AuthLanding] Google OAuth error:', e?.message ?? e);
-      Alert.alert('Google 로그인 실패', e?.message ?? String(e));
+      console.log('[AuthLanding] Google Native error:', e?.message ?? e);
+
+      // 사용자 취소 케이스는 조용히 처리하거나 메시지 최소화
+      const msg = String(e?.message ?? e);
+
+      if (e?.code === statusCodes.SIGN_IN_CANCELLED) {
+        // 유저가 취소한 경우: 굳이 실패 Alert 안 띄우는 게 UX 좋음
+        return;
+      }
+      if (e?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Google 로그인 실패', 'Google Play 서비스가 필요합니다.');
+        return;
+      }
+
+      Alert.alert('Google 로그인 실패', msg);
     } finally {
       setLoading(false);
       setLoadingProvider(null);
@@ -171,7 +151,6 @@ export default function AuthLandingScreen({ navigation }: any) {
 
   /**
    * ✅ Apple: 네이티브 로그인 → identityToken → Supabase signInWithIdToken
-   * - WebBrowser/redirectTo/PKCE 교환 필요 없음
    */
   const handleAppleNative = async () => {
     if (lockRef.current) return;
@@ -217,7 +196,9 @@ export default function AuthLandingScreen({ navigation }: any) {
     <ScreenContainer>
       <View style={{ marginTop: 56, marginBottom: 18, alignItems: 'center' }}>
         <Image source={dotoringLogo} style={{ width: 64, height: 64, marginBottom: 10 }} resizeMode="contain" />
-        <Text style={{ fontSize: 30, fontFamily: 'PretendardBold', color: colors.primary }}>DOTORING</Text>
+        <Text allowFontScaling={false} style={{ fontSize: 30, fontFamily: 'PretendardBold', color: colors.primary }}>
+          DOTORING
+        </Text>
 
         {statusMsg && (
           <View
@@ -230,19 +211,24 @@ export default function AuthLandingScreen({ navigation }: any) {
               maxWidth: 280,
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 12, textAlign: 'center', lineHeight: 16 }}>{statusMsg}</Text>
+            <Text allowFontScaling={false} style={{ color: '#fff', fontSize: 12, textAlign: 'center', lineHeight: 16 }}>
+              {statusMsg}
+            </Text>
           </View>
         )}
 
-        <Text style={{ marginTop: 12, color: colors.subtext, fontSize: 13, textAlign: 'center', lineHeight: 19 }}>
+        <Text
+          allowFontScaling={false}
+          style={{ marginTop: 12, color: colors.subtext, fontSize: 13, textAlign: 'center', lineHeight: 19 }}
+        >
           잊어버리기 쉬운 작은 것들을{'\n'}도토링이 대신 기억해줄게요.
         </Text>
       </View>
 
       <SectionCard style={{ paddingTop: 18, paddingBottom: 18 }}>
-        {/* Google */}
+        {/* Google (Android Native) */}
         <TouchableOpacity
-          onPress={handleGoogleOAuth}
+          onPress={handleGoogleNative}
           disabled={loading}
           activeOpacity={0.9}
           style={{
@@ -259,16 +245,20 @@ export default function AuthLandingScreen({ navigation }: any) {
               <>
                 <ActivityIndicator />
                 <View style={{ width: 8 }} />
-                <Text style={{ fontSize: 14, color: '#111', fontFamily: 'PretendardBold' }}>진행 중...</Text>
+                <Text allowFontScaling={false} style={{ fontSize: 14, color: '#111', fontFamily: 'PretendardBold' }}>
+                  진행 중...
+                </Text>
               </>
             ) : (
-              <Text style={{ fontSize: 14, color: '#111', fontFamily: 'PretendardBold' }}>Google로 계속하기</Text>
+              <Text allowFontScaling={false} style={{ fontSize: 14, color: '#111', fontFamily: 'PretendardBold' }}>
+                Google로 계속하기
+              </Text>
             )}
           </View>
           <View style={{ width: 18 }} />
         </TouchableOpacity>
 
-        {/* Apple (Native) */}
+        {/* Apple (iOS Native) */}
         {Platform.OS === 'ios' && appleAvailable && (
           <>
             <View style={{ height: 10 }} />
@@ -284,16 +274,22 @@ export default function AuthLandingScreen({ navigation }: any) {
                 opacity: loading ? 0.7 : 1,
               }}
             >
-              <Text style={{ width: 18, color: '#fff', fontSize: 16, textAlign: 'center' }}></Text>
+              <Text allowFontScaling={false} style={{ width: 18, color: '#fff', fontSize: 16, textAlign: 'center' }}>
+                
+              </Text>
               <View style={{ flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
                 {loadingProvider === 'apple' ? (
                   <>
                     <ActivityIndicator color="#fff" />
                     <View style={{ width: 8 }} />
-                    <Text style={{ fontSize: 14, color: '#fff', fontFamily: 'PretendardBold' }}>진행 중...</Text>
+                    <Text allowFontScaling={false} style={{ fontSize: 14, color: '#fff', fontFamily: 'PretendardBold' }}>
+                      진행 중...
+                    </Text>
                   </>
                 ) : (
-                  <Text style={{ fontSize: 14, color: '#fff', fontFamily: 'PretendardBold' }}>Apple로 계속하기</Text>
+                  <Text allowFontScaling={false} style={{ fontSize: 14, color: '#fff', fontFamily: 'PretendardBold' }}>
+                    Apple로 계속하기
+                  </Text>
                 )}
               </View>
               <View style={{ width: 18 }} />
@@ -312,14 +308,14 @@ export default function AuthLandingScreen({ navigation }: any) {
           activeOpacity={0.8}
           style={{ alignItems: 'center', paddingVertical: 6 }}
         >
-          <Text style={{ fontSize: 12, color: colors.subtext, textDecorationLine: 'underline' }}>
+          <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.subtext, textDecorationLine: 'underline' }}>
             비밀번호를 잊으셨나요?
           </Text>
         </TouchableOpacity>
       </SectionCard>
 
       <View style={{ marginTop: 18, alignItems: 'center' }}>
-        <Text style={{ fontSize: 11, color: colors.subtext, textAlign: 'center' }}>
+        <Text allowFontScaling={false} style={{ fontSize: 11, color: colors.subtext, textAlign: 'center' }}>
           계속하면 개인정보 처리방침에 동의한 것으로 간주됩니다.
         </Text>
       </View>

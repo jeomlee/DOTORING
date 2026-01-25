@@ -1,4 +1,3 @@
-// src/navigation/RootNavigator.tsx
 import React, { useMemo } from 'react';
 import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -7,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '../theme';
+import DotoText from '../components/DotoText';
 
 import TodayScreen from '../screens/TodayScreen';
 import DotorihamScreen from '../screens/DotorihamScreen';
@@ -41,11 +41,20 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+const LABEL_MAP: Record<keyof MainTabParamList, string> = {
+  Today: '오늘',
+  Box: '도토리함',
+  Calendar: '달력',
+  Forest: '숲',
+  Settings: '설정',
+};
+
 function MainTabs() {
   const insets = useSafeAreaInsets();
 
   const tabBarStyle = useMemo(() => {
     const baseHeight = Platform.OS === 'ios' ? 54 : 56;
+
     return {
       backgroundColor: '#FFF',
       borderTopColor: '#EFE7DF',
@@ -67,11 +76,19 @@ function MainTabs() {
         tabBarHideOnKeyboard: true,
         tabBarStyle,
 
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontFamily: 'PretendardBold',
-          marginBottom: 2,
-        },
+        // ✅ 핵심: 라벨을 직접 렌더링해서 allowFontScaling=false 강제
+        tabBarLabel: ({ color }) => (
+          <DotoText
+            style={{
+              fontSize: 10,
+              fontFamily: 'PretendardBold',
+              color,
+              marginBottom: 2,
+            }}
+          >
+            {LABEL_MAP[route.name as keyof MainTabParamList] ?? route.name}
+          </DotoText>
+        ),
 
         tabBarIcon: ({ color, size }) => {
           const iconSize = size ?? 20;
@@ -92,11 +109,11 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Today" component={TodayScreen} options={{ tabBarLabel: '오늘' }} />
-      <Tab.Screen name="Box" component={DotorihamScreen} options={{ tabBarLabel: '도토리함' }} />
-      <Tab.Screen name="Calendar" component={CalendarScreen} options={{ tabBarLabel: '달력' }} />
-      <Tab.Screen name="Forest" component={ForestScreen} options={{ tabBarLabel: '숲' }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: '설정' }} />
+      <Tab.Screen name="Today" component={TodayScreen} />
+      <Tab.Screen name="Box" component={DotorihamScreen} />
+      <Tab.Screen name="Calendar" component={CalendarScreen} />
+      <Tab.Screen name="Forest" component={ForestScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }

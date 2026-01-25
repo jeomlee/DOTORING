@@ -39,7 +39,7 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-  // ✅ Apple 버튼 표시 여부 (실기/권한/환경에 따라 달라질 수 있어서 체크)
+  // ✅ Apple 버튼 표시 여부
   const [appleAvailable, setAppleAvailable] = useState(false);
 
   const lockRef = useRef(false);
@@ -216,16 +216,13 @@ export default function AuthScreen() {
 
   return (
     <ScreenContainer>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* 상단 브랜드 */}
         <View style={{ marginTop: 32, marginBottom: 24, alignItems: 'center' }}>
-          <Text style={{ fontSize: 26, fontFamily: 'PretendardBold', color: colors.primary }}>
+          <Text allowFontScaling={false} style={{ fontSize: 26, fontFamily: 'PretendardBold', color: colors.primary }}>
             DOTORING
           </Text>
-          <Text style={{ marginTop: 6, color: colors.subtext, fontSize: 13, textAlign: 'center' }}>
+          <Text allowFontScaling={false} style={{ marginTop: 6, color: colors.subtext, fontSize: 13, textAlign: 'center' }}>
             잊어버리기 쉬운 작은 혜택들을{'\n'}
             도토링이 대신 기억해줄게.
           </Text>
@@ -243,7 +240,10 @@ export default function AuthScreen() {
               alignItems: 'center',
             }}
           >
-            <Text style={{ color: mode === 'login' ? '#fff' : colors.text, fontFamily: 'PretendardBold', fontSize: 13 }}>
+            <Text
+              allowFontScaling={false}
+              style={{ color: mode === 'login' ? '#fff' : colors.text, fontFamily: 'PretendardBold', fontSize: 13 }}
+            >
               로그인
             </Text>
           </TouchableOpacity>
@@ -258,7 +258,10 @@ export default function AuthScreen() {
               alignItems: 'center',
             }}
           >
-            <Text style={{ color: mode === 'signup' ? '#fff' : colors.text, fontFamily: 'PretendardBold', fontSize: 13 }}>
+            <Text
+              allowFontScaling={false}
+              style={{ color: mode === 'signup' ? '#fff' : colors.text, fontFamily: 'PretendardBold', fontSize: 13 }}
+            >
               회원가입
             </Text>
           </TouchableOpacity>
@@ -266,8 +269,11 @@ export default function AuthScreen() {
 
         {/* 이메일 폼 */}
         <SectionCard style={{ paddingTop: 18, paddingBottom: 14 }}>
-          <Text style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>이메일</Text>
+          <Text allowFontScaling={false} style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
+            이메일
+          </Text>
           <TextInput
+            allowFontScaling={false}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -288,8 +294,11 @@ export default function AuthScreen() {
             }}
           />
 
-          <Text style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>비밀번호</Text>
+          <Text allowFontScaling={false} style={{ fontSize: 13, color: colors.subtext, marginBottom: 4 }}>
+            비밀번호
+          </Text>
           <TextInput
+            allowFontScaling={false}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -310,10 +319,14 @@ export default function AuthScreen() {
 
           {mode === 'signup' && (
             <>
-              <Text style={{ fontSize: 13, color: colors.subtext, marginBottom: 4, marginTop: 4 }}>
+              <Text
+                allowFontScaling={false}
+                style={{ fontSize: 13, color: colors.subtext, marginBottom: 4, marginTop: 4 }}
+              >
                 비밀번호 확인
               </Text>
               <TextInput
+                allowFontScaling={false}
                 value={passwordCheck}
                 onChangeText={setPasswordCheck}
                 secureTextEntry
@@ -336,7 +349,9 @@ export default function AuthScreen() {
 
           {infoMessage && (
             <View style={{ marginTop: 8, marginBottom: 4 }}>
-              <Text style={{ fontSize: 12, color: colors.accent }}>{infoMessage}</Text>
+              <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.accent }}>
+                {infoMessage}
+              </Text>
             </View>
           )}
 
@@ -361,7 +376,9 @@ export default function AuthScreen() {
         <View style={{ marginTop: 18 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14, opacity: 0.8 }}>
             <View style={{ flex: 1, height: 1, backgroundColor: '#E0D8CF' }} />
-            <Text style={{ marginHorizontal: 10, fontSize: 12, color: colors.subtext }}>또는</Text>
+            <Text allowFontScaling={false} style={{ marginHorizontal: 10, fontSize: 12, color: colors.subtext }}>
+              또는
+            </Text>
             <View style={{ flex: 1, height: 1, backgroundColor: '#E0D8CF' }} />
           </View>
 
@@ -373,7 +390,7 @@ export default function AuthScreen() {
               style={{ backgroundColor: '#111' }}
             />
 
-            {/* ✅ Apple 공식 버튼 (iOS + available일 때만 보임) */}
+            {/* ✅ Apple 공식 버튼 */}
             {Platform.OS === 'ios' && appleAvailable && (
               <View style={{ marginTop: 10 }}>
                 <AppleAuthentication.AppleAuthenticationButton
@@ -391,11 +408,11 @@ export default function AuthScreen() {
         {/* 하단 안내문 */}
         <View style={{ marginTop: 16, alignItems: 'center' }}>
           {mode === 'login' ? (
-            <Text style={{ fontSize: 12, color: colors.subtext }}>
+            <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.subtext }}>
               아직 계정이 없다면, 위에서 회원가입을 선택해주세요.
             </Text>
           ) : (
-            <Text style={{ fontSize: 12, color: colors.subtext }}>
+            <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.subtext }}>
               가입 후에는 이메일 인증 메일을 꼭 눌러주세요.
             </Text>
           )}

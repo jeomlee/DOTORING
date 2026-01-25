@@ -3,7 +3,7 @@
     "name": "DOTORING",
     "slug": "dotoring",
     "scheme": "dotoring",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
     ],
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -27,13 +28,15 @@
     "ios": {
       "buildNumber": "6",
       "usesAppleSignIn": true,
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.jeomlee.dotoring",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "com.jeomlee.dotoring",
-            "CFBundleURLSchemes": ["dotoring"]
+            "CFBundleURLSchemes": [
+              "dotoring"
+            ]
           }
         ],
         "NSUserNotificationsUsageDescription": "도토리 만료 알림을 보내기 위해 알림 권한이 필요합니다.",
@@ -53,16 +56,30 @@
         {
           "action": "VIEW",
           "data": [
-            { "scheme": "dotoring", "host": "auth", "pathPrefix": "/callback" }
+            {
+              "scheme": "dotoring",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
           "data": [
-            { "scheme": "dotoring", "host": "auth", "pathPrefix": "/recovery" }
+            {
+              "scheme": "dotoring",
+              "host": "auth",
+              "pathPrefix": "/recovery"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },

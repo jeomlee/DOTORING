@@ -15,9 +15,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   const lockRef = useRef(false);
 
   const redirectTo = useMemo(() => {
-    // ✅ 메일 링크 클릭 시 앱이 열리게 해야 함
-    // ResetPasswordScreen에서 이 경로를 recovery로 인식할 수 있도록 맞춰줘
-    // App.tsx에서 isRecoveryUrl이 type=recovery도 인식하지만, path도 맞추면 더 안정적
     return Linking.createURL('auth/recovery');
   }, []);
 
@@ -39,7 +36,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
       setLoading(true);
 
-      // ✅ Supabase에 비밀번호 재설정 메일 발송 (redirectTo 중요)
       const { error } = await supabase.auth.resetPasswordForEmail(e, {
         redirectTo,
       });
@@ -53,7 +49,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
           {
             text: '확인',
             onPress: () => {
-              // ✅ 로그인(랜딩) 화면으로 복귀
               navigation.goBack?.() ?? navigation.navigate('AuthLanding');
             },
           },
@@ -70,16 +65,29 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   return (
     <ScreenContainer>
       <View style={{ marginTop: 24, marginBottom: 12 }}>
-        <Text style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}>
+        <Text
+          allowFontScaling={false}
+          style={{ fontSize: 20, fontFamily: 'PretendardBold', color: colors.text }}
+        >
           비밀번호를 잊으셨나요?
         </Text>
-        <Text style={{ marginTop: 6, fontSize: 12, color: colors.subtext, lineHeight: 18 }}>
+
+        <Text
+          allowFontScaling={false}
+          style={{ marginTop: 6, fontSize: 12, color: colors.subtext, lineHeight: 18 }}
+        >
           가입한 이메일로 재설정 링크를 보내드릴게요.
         </Text>
       </View>
 
       <SectionCard>
-        <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}>이메일</Text>
+        <Text
+          allowFontScaling={false}
+          style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}
+        >
+          이메일
+        </Text>
+
         <TextInput
           value={email}
           onChangeText={setEmail}
@@ -118,7 +126,10 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       </SectionCard>
 
       <View style={{ marginTop: 18 }}>
-        <Text style={{ fontSize: 11, color: colors.subtext, lineHeight: 16 }}>
+        <Text
+          allowFontScaling={false}
+          style={{ fontSize: 11, color: colors.subtext, lineHeight: 16 }}
+        >
           * 메일이 안 오면 스팸함/프로모션함도 확인해주세요.
         </Text>
       </View>

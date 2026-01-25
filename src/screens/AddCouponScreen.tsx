@@ -2,9 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
   Alert,
-  TextInput,
   TouchableOpacity,
   Platform,
   Image,
@@ -24,6 +22,8 @@ import { colors } from '../theme';
 import ScreenContainer from '../components/ScreenContainer';
 import SectionCard from '../components/SectionCard';
 import DotoButton from '../components/DotoButton';
+import DotoText from '../components/DotoText';
+import DotoTextInput from '../components/DotoTextInput';
 import { scheduleCouponNotification } from '../utils/couponNotifications';
 
 // ✅ 도토리 아이콘
@@ -89,12 +89,8 @@ async function withRetry<T>(
 
 /**
  * ✅ 업로드 성능/안정 개선 버전 (UI 영향 없음)
- * - fetch(file://) 제거 → “네트워크 실패”류 오류 감소
- * - 이미지 큰 경우 더 줄여서 업로드 시간 단축
- * - timeout+retry 포함
  */
 async function uploadCouponImageAsKey(userId: string, localUri: string) {
-  // 0) 원본 용량 확인(가능하면)
   let sizeBytes: number | null = null;
   try {
     const info = await FileSystem.getInfoAsync(localUri, { size: true } as any);
@@ -103,10 +99,6 @@ async function uploadCouponImageAsKey(userId: string, localUri: string) {
     sizeBytes = null;
   }
 
-  // 1) 용량에 따라 리사이즈/압축 조정 (체감 업로드 개선)
-  //   - 아주 큰 사진(>= 3MB): 더 작게/더 압축
-  //   - 보통(>= 1MB): 기존 값
-  //   - 작음(< 1MB): 큰 변환 없이 JPEG로만 정리
   const policy =
     sizeBytes != null && sizeBytes >= 3 * 1024 * 1024
       ? { width: 780, compress: 0.72 }
@@ -114,7 +106,6 @@ async function uploadCouponImageAsKey(userId: string, localUri: string) {
       ? { width: 960, compress: 0.78 }
       : { width: 960, compress: 0.82 };
 
-  // 2) 리사이즈/압축
   const manipulated = await ImageManipulator.manipulateAsync(
     localUri,
     [{ resize: { width: policy.width } }],
@@ -123,22 +114,17 @@ async function uploadCouponImageAsKey(userId: string, localUri: string) {
 
   const key = `coupons/${userId}/${Date.now()}.jpg`;
 
-  // 3) base64 읽기 + ArrayBuffer 변환
   const readArrayBuffer = async () => {
-    // legacy FileSystem에서도 encoding은 string으로 들어가야 안전한 경우가 있음
     const base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
       encoding: 'base64' as any,
     });
 
-    // Buffer → ArrayBuffer
     const buf = Buffer.from(base64, 'base64');
     const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     return arrayBuffer;
   };
 
-  // 4) 실제 업로드 (구간별로 retry)
   const doUpload = async () => {
-    // read가 제일 무거움 → 여기부터 timeout/retry
     const arrayBuffer = await withRetry(readArrayBuffer, {
       retries: 1,
       baseDelayMs: 250,
@@ -177,10 +163,7 @@ export default function AddCouponScreen({ navigation }: any) {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // ✅ 권한 상태 캐시(매번 request 호출 줄임)
   const mediaPermGrantedRef = useRef<boolean | null>(null);
-
-  // ✅ 중복 저장 방지(더블탭)
   const savingLockRef = useRef(false);
 
   const expireText = useMemo(() => dayjs(expireDate).format('YYYY.MM.DD'), [expireDate]);
@@ -237,7 +220,6 @@ export default function AddCouponScreen({ navigation }: any) {
     setSaving(true);
 
     try {
-      // ✅ UI 프리즈 체감 완화(레이아웃 변화 없음)
       await sleep(0);
 
       const { data: sess } = await supabase.auth.getSession();
@@ -271,9 +253,7 @@ export default function AddCouponScreen({ navigation }: any) {
 
       navigation.navigate('MainTabs', {
         screen: 'Box',
-        params: {
-          newCoupon: data,
-        },
+        params: { newCoupon: data },
       });
     } catch (e: any) {
       Alert.alert('저장 실패', e?.message ?? '저장에 실패했어요.');
@@ -295,11 +275,10 @@ export default function AddCouponScreen({ navigation }: any) {
         contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomSpace }}
       >
         <View style={{ marginBottom: 14 }}>
-          {/* ✅ 타이틀: 🌰 대신 DOTORING.png */}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 22, fontFamily: 'PretendardBold', color: colors.text }}>
+            <DotoText style={{ fontSize: 22, fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1}>
               도토리 추가
-            </Text>
+            </DotoText>
             <Image
               source={DOTORING_ICON}
               style={{ width: 22, height: 22, marginLeft: 6 }}
@@ -307,15 +286,15 @@ export default function AddCouponScreen({ navigation }: any) {
             />
           </View>
 
-          <Text style={{ marginTop: 4, color: colors.subtext }}>
+          <DotoText style={{ marginTop: 4, color: colors.subtext }} numberOfLines={2} ellipsizeMode="tail">
             이미지를 중심으로 저장하면, 더 쉽게 꺼내 쓸 수 있어요.
-          </Text>
+          </DotoText>
         </View>
 
         <SectionCard style={{ marginBottom: 12 }}>
-          <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 10 }}>
+          <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 10 }} numberOfLines={1}>
             이미지 (선택)
-          </Text>
+          </DotoText>
 
           <TouchableOpacity
             activeOpacity={0.9}
@@ -334,7 +313,9 @@ export default function AddCouponScreen({ navigation }: any) {
             ) : (
               <View style={{ alignItems: 'center' }}>
                 <Ionicons name="image-outline" size={28} color={colors.subtext} />
-                <Text style={{ marginTop: 8, color: colors.subtext }}>이미지 선택하기</Text>
+                <DotoText style={{ marginTop: 8, color: colors.subtext }} numberOfLines={1}>
+                  이미지 선택하기
+                </DotoText>
               </View>
             )}
           </TouchableOpacity>
@@ -352,17 +333,21 @@ export default function AddCouponScreen({ navigation }: any) {
         </SectionCard>
 
         <SectionCard style={{ marginBottom: 12 }}>
-          <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 10 }}>
+          <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 10 }} numberOfLines={1}>
             기본 정보 ✍️
-          </Text>
+          </DotoText>
 
-          <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }}>이름</Text>
-          <TextInput
+          <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }} numberOfLines={1}>
+            이름
+          </DotoText>
+
+          <DotoTextInput
             value={title}
             onChangeText={setTitle}
             placeholder="예) 스타벅스 아메리카노 T"
             placeholderTextColor="#B7AFA5"
             editable={!saving}
+            returnKeyType="done"
             style={{
               borderWidth: 1,
               borderColor: '#E0D9CF',
@@ -374,10 +359,14 @@ export default function AddCouponScreen({ navigation }: any) {
               marginBottom: 12,
               backgroundColor: '#fff',
               opacity: saving ? 0.9 : 1,
+              minHeight: 44, // ✅ 폰트/디스플레이 스케일에 흔들리지 않게
             }}
           />
 
-          <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }}>카테고리</Text>
+          <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 8 }} numberOfLines={1}>
+            카테고리
+          </DotoText>
+
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {CATEGORIES.map((c) => {
               const active = c === category;
@@ -396,9 +385,12 @@ export default function AddCouponScreen({ navigation }: any) {
                     marginRight: 8,
                     marginBottom: 8,
                     opacity: saving ? 0.85 : 1,
+                    minHeight: 36, // ✅ 칩 높이 고정
                   }}
                 >
-                  <Text
+                  <DotoText
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                     style={{
                       fontSize: 12,
                       fontFamily: active ? 'PretendardBold' : 'Pretendard',
@@ -406,7 +398,7 @@ export default function AddCouponScreen({ navigation }: any) {
                     }}
                   >
                     {c}
-                  </Text>
+                  </DotoText>
                 </TouchableOpacity>
               );
             })}
@@ -414,33 +406,38 @@ export default function AddCouponScreen({ navigation }: any) {
 
           <View style={{ height: 10 }} />
 
-          <Text style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }}>메모 (선택)</Text>
-          <TextInput
+          <DotoText style={{ fontSize: 12, color: colors.subtext, marginBottom: 6 }} numberOfLines={1}>
+            메모 (선택)
+          </DotoText>
+
+          <DotoTextInput
             value={memo}
             onChangeText={setMemo}
             placeholder="예) 매장 전용 / 사이즈 변경 불가"
             placeholderTextColor="#B7AFA5"
             multiline
             editable={!saving}
+            textAlignVertical="top"
             style={{
               borderWidth: 1,
               borderColor: '#E0D9CF',
               borderRadius: 12,
               paddingHorizontal: 12,
               paddingVertical: 12,
-              minHeight: 70,
+              minHeight: 90, // ✅ 기기 스케일에도 안정적으로
               fontFamily: 'Pretendard',
               color: colors.text,
               backgroundColor: '#fff',
               opacity: saving ? 0.9 : 1,
+              lineHeight: 22, // ✅ 줄간격 고정(깨짐/겹침 방지)
             }}
           />
         </SectionCard>
 
         <SectionCard style={{ marginBottom: 12 }}>
-          <Text style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 10 }}>
+          <DotoText style={{ fontSize: 14, fontFamily: 'PretendardBold', color: colors.text, marginBottom: 10 }} numberOfLines={1}>
             만료일 📅
-          </Text>
+          </DotoText>
 
           <TouchableOpacity
             activeOpacity={0.85}
@@ -456,13 +453,19 @@ export default function AddCouponScreen({ navigation }: any) {
               paddingVertical: 12,
               backgroundColor: '#fff',
               opacity: saving ? 0.9 : 1,
+              minHeight: 48, // ✅ 버튼 높이 고정
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 }}>
               <Ionicons name="calendar-outline" size={18} color={colors.subtext} style={{ marginRight: 8 }} />
-              <Text style={{ fontFamily: 'PretendardBold', color: colors.text }}>{expireText}</Text>
+              <DotoText style={{ fontFamily: 'PretendardBold', color: colors.text }} numberOfLines={1} ellipsizeMode="tail">
+                {expireText}
+              </DotoText>
             </View>
-            <Text style={{ color: colors.subtext }}>변경</Text>
+
+            <DotoText style={{ color: colors.subtext }} numberOfLines={1}>
+              변경
+            </DotoText>
           </TouchableOpacity>
 
           {showDatePicker && (
